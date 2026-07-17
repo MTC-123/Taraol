@@ -4,7 +4,14 @@ version = "0.1.0"
 description = "Agent Mesh Radar shared library"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115.0",
+    "httpx>=0.28.0",
+    "opentelemetry-api>=1.28.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.28.0",
+    "opentelemetry-sdk>=1.28.0",
+    "uvicorn>=0.32.0",
+]
 
 [dependency-groups]
 dev = [
@@ -34,4 +41,3 @@ addopts = "-q"
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true
-

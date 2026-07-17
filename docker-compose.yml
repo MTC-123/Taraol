@@ -5,9 +5,39 @@ name: agent-mesh-radar
 include:
   - path: ./deploy/signoz/pours/deployment/compose.yaml
 
-# services:
-#   agents:     # PLAN 02/03
-#   detection:  # PLAN 05/06
-#   mcp_tool:   # PLAN 07
+services:
+  # Run the committed static receiver/exporter pipelines directly. The bundled
+  # OpAMP manager otherwise starts with a no-op default pipeline before a UI
+  # configuration is supplied, which rejects local OTLP traffic.
+  ingester:
+    command:
+      - -c
+      - >-
+        /signoz-otel-collector migrate sync check &&
+        /signoz-otel-collector --config=/etc/otel-collector-config.yaml
+        --copy-path=/var/tmp/collector-config.yaml
 
+  beta:
+    build:
+      context: .
+      dockerfile: agents/beta/Dockerfile
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
+      OTEL_SERVICE_NAME: agent_beta
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+    networks:
+      - signoz-network
 
+  alpha:
+    build:
+      context: .
+      dockerfile: agents/alpha/Dockerfile
+    depends_on:
+      - beta
+    environment:
+      BETA_A2A_URL: http://beta:8001/a2a
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
+      OTEL_SERVICE_NAME: agent_alpha
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+    networks:
+      - signoz-network
