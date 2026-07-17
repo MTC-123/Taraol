@@ -1,0 +1,10 @@
+# Placeholder schema for PLAN 04. Values are USD per 1,000 tokens and are not pricing advice.
+models:
+  example-small:
+    input_per_1k: 0.001
+    output_per_1k: 0.002
+  example-large:
+    input_per_1k: 0.01
+    output_per_1k: 0.03
+
+

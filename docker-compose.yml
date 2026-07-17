@@ -1,0 +1,13 @@
+# SigNoz is rendered from deploy/signoz/casting.yaml by Foundry and committed for
+# reproducible `docker compose up` usage. Future layer services belong below.
+name: agent-mesh-radar
+
+include:
+  - path: ./deploy/signoz/pours/deployment/compose.yaml
+
+# services:
+#   agents:     # PLAN 02/03
+#   detection:  # PLAN 05/06
+#   mcp_tool:   # PLAN 07
+
+
