@@ -15,17 +15,19 @@ def test_genai_helpers_emit_pinned_attributes_without_content() -> None:
     tracer = provider.get_tracer("planner")
 
     with agent_span(tracer, "planner", "conversation-1"):
-        with chat_span(tracer, "example-small") as span:
-            record_chat_result(span, complete("make a plan", "example-small"))
+        with chat_span(tracer, "gpt-4.1-mini") as span:
+            record_chat_result(span, complete("make a plan", "gpt-4.1-mini"))
         with tool_span(tracer, "search_sources"):
             pass
 
     spans = {span.name: span for span in exporter.get_finished_spans()}
-    chat = spans["chat example-small"]
+    chat = spans["chat gpt-4.1-mini"]
     assert chat.attributes[semconv.GEN_AI_OPERATION_NAME] == semconv.CHAT
-    assert chat.attributes[semconv.GEN_AI_REQUEST_MODEL] == "example-small"
+    assert chat.attributes[semconv.GEN_AI_REQUEST_MODEL] == "gpt-4.1-mini"
     assert chat.attributes[semconv.GEN_AI_USAGE_INPUT_TOKENS] > 0
     assert chat.attributes[semconv.GEN_AI_USAGE_OUTPUT_TOKENS] > 0
+    assert "agentmesh.cost.usd" in chat.attributes
+    assert chat.attributes[semconv.GEN_AI_CONVERSATION_ID] == "conversation-1"
     assert "gen_ai.prompt" not in chat.attributes
     assert spans["execute_tool search_sources"].attributes[semconv.GEN_AI_OPERATION_NAME] == (
         semconv.EXECUTE_TOOL

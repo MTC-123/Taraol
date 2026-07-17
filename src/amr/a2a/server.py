@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
+from amr.cost import request_cost_scope
 from amr.propagation import extract_from
 
 Handler = Callable[[dict[str, Any]], dict[str, Any] | Awaitable[dict[str, Any]]]
@@ -55,14 +56,21 @@ class A2AServer:
                 # Agent handlers make blocking HTTP calls to their peers.  Run
                 # synchronous handlers off the ASGI loop so a bounded cycle can
                 # re-enter this service (writer -> critic -> writer) safely.
-                if inspect.iscoroutinefunction(handler):
-                    result = await handler(params)
-                else:
-                    result = await asyncio.to_thread(handler, params)
-                if inspect.isawaitable(result):
-                    result = await result
-                if not isinstance(result, dict):
-                    raise TypeError("A2A handlers must return an object")
+                with request_cost_scope() as subtree:
+                    if inspect.iscoroutinefunction(handler):
+                        result = await handler(params)
+                    else:
+                        result = await asyncio.to_thread(handler, params)
+                    if inspect.isawaitable(result):
+                        result = await result
+                    if not isinstance(result, dict):
+                        raise TypeError("A2A handlers must return an object")
+                    # JSON-RPC metadata is the explicit cross-process cost handoff.
+                    # Each server returns its direct chat costs plus descendants;
+                    # callers put that total on exactly one CLIENT hop span.
+                    meta = result.get("_meta")
+                    result["_meta"] = dict(meta) if isinstance(meta, dict) else {}
+                    result["_meta"]["cost_usd"] = subtree.usd
             except Exception as exc:
                 span.record_exception(exc)
                 span.set_status(Status(StatusCode.ERROR, str(exc)))

@@ -29,7 +29,8 @@ def test_a2a_call_creates_direct_cross_service_parent_link() -> None:
             http_client=http_client,
         )
         assert client.call("ping", {"value": "hello"}, "http://testserver/a2a") == {
-            "pong": {"value": "hello"}
+            "pong": {"value": "hello"},
+            "_meta": {"cost_usd": 0.0},
         }
 
     client_span = alpha_exporter.get_finished_spans()[0]

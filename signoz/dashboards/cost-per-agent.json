@@ -1,0 +1,15 @@
+{
+  "title": "Agent Mesh Cost per Agent",
+  "description": "Direct LLM USD cost, grouped by emitting service. This intentionally queries chat spans only, so nested A2A subtree totals are not double-counted.",
+  "tags": ["agent-mesh-radar", "cost"],
+  "uuid": "56182c5d-308b-4aa2-9c6e-404cabccafb6",
+  "version": "v5",
+  "uploadedGrafana": false,
+  "variables": {},
+  "panelMap": {},
+  "layout": [{"i": "d640a3e3-b9ee-4b34-8e65-c976742cbf22", "x": 0, "y": 0, "w": 12, "h": 7, "moved": false, "static": false}],
+  "widgets": [{
+    "id": "d640a3e3-b9ee-4b34-8e65-c976742cbf22", "title": "Direct chat USD by agent", "panelTypes": "table", "description": "Round displayed USD values to four decimals.", "timePreferance": "GLOBAL_TIME", "yAxisUnit": "none", "thresholds": [], "columnUnits": {"A": "none"},
+    "query": {"queryType": "builder", "id": "db1d81af-567e-4cfe-b0d9-026c3d764c78", "clickhouse_sql": [{"name": "A", "query": "", "disabled": false, "legend": ""}], "promql": [{"name": "A", "query": "", "disabled": false, "legend": ""}], "builder": {"queryFormulas": [], "queryData": [{"queryName": "A", "dataSource": "traces", "expression": "A", "disabled": false, "stepInterval": 60, "functions": [], "groupBy": [{"key": "serviceName", "id": "serviceName--string--tag--true", "dataType": "string", "type": "tag", "isColumn": true, "isJSON": false}], "aggregations": [{"expression": "sum(agentmesh.cost.usd)"}], "filter": {"expression": "gen_ai.operation.name = 'chat' AND agentmesh.cost.usd EXISTS"}, "having": {"expression": ""}, "orderBy": [], "limit": null, "legend": "{{serviceName}}"}]}}
+  }]
+}

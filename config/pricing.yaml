@@ -1,9 +1,7 @@
-# Placeholder schema for PLAN 04. Values are USD per 1,000 tokens and are not pricing advice.
+# USD per 1,000 tokens. Prices are configuration, not pricing advice.
 models:
-  # Default deterministic demo model emitted by amr.llm.
-  example-small:
-    input_per_1k: 0.001
-    output_per_1k: 0.002
-  example-large:
-    input_per_1k: 0.01
-    output_per_1k: 0.03
+  # source: https://openai.com/api/pricing/ (retrieved 2026-07-17)
+  # $0.40 input / $1.60 output per 1M tokens.
+  gpt-4.1-mini:
+    input_per_1k: 0.0004
+    output_per_1k: 0.0016

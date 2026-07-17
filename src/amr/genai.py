@@ -3,11 +3,15 @@
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 
 from opentelemetry.trace import SpanKind, Tracer
 
 from . import semconv
+from .cost import add_to_request_cost, cost_of
 from .llm import LLMResult
+
+_conversation_id: ContextVar[str | None] = ContextVar("amr_conversation_id", default=None)
 
 
 def _provider_name() -> str:
@@ -27,10 +31,24 @@ def chat_span(tracer: Tracer, model: str) -> Iterator[object]:
         semconv.GEN_AI_USAGE_OUTPUT_TOKENS: 0,
         semconv.GEN_AI_RESPONSE_FINISH_REASONS: ("unknown",),
     }
+    conversation_id = _conversation_id.get()
+    if conversation_id is not None:
+        # A cost query must be able to group direct chat charges by conversation
+        # without summing every nested A2A edge a second time.
+        attributes[semconv.GEN_AI_CONVERSATION_ID] = conversation_id
     with tracer.start_as_current_span(
         f"chat {model}", kind=SpanKind.CLIENT, attributes=attributes
     ) as span:
-        yield span
+        try:
+            yield span
+        finally:
+            input_tokens = span.attributes.get(semconv.GEN_AI_USAGE_INPUT_TOKENS, 0)  # type: ignore[attr-defined]
+            output_tokens = span.attributes.get(semconv.GEN_AI_USAGE_OUTPUT_TOKENS, 0)  # type: ignore[attr-defined]
+            cost_usd, unpriced = cost_of(model, input_tokens, output_tokens)
+            span.set_attribute("agentmesh.cost.usd", cost_usd)  # type: ignore[attr-defined]
+            if unpriced:
+                span.set_attribute("agentmesh.cost.unpriced", True)  # type: ignore[attr-defined]
+            add_to_request_cost(cost_usd)
 
 
 def record_chat_result(span: object, result: LLMResult) -> None:
@@ -53,13 +71,17 @@ def tool_span(tracer: Tracer, tool_name: str) -> Iterator[object]:
 
 @contextmanager
 def agent_span(tracer: Tracer, agent_name: str, conversation_id: str) -> Iterator[object]:
-    with tracer.start_as_current_span(
-        f"invoke_agent {agent_name}",
-        kind=SpanKind.INTERNAL,
-        attributes={
-            semconv.GEN_AI_OPERATION_NAME: semconv.INVOKE_AGENT,
-            semconv.GEN_AI_AGENT_NAME: agent_name,
-            semconv.GEN_AI_CONVERSATION_ID: conversation_id,
-        },
-    ) as span:
-        yield span
+    token = _conversation_id.set(conversation_id)
+    try:
+        with tracer.start_as_current_span(
+            f"invoke_agent {agent_name}",
+            kind=SpanKind.INTERNAL,
+            attributes={
+                semconv.GEN_AI_OPERATION_NAME: semconv.INVOKE_AGENT,
+                semconv.GEN_AI_AGENT_NAME: agent_name,
+                semconv.GEN_AI_CONVERSATION_ID: conversation_id,
+            },
+        ) as span:
+            yield span
+    finally:
+        _conversation_id.reset(token)

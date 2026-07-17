@@ -10,6 +10,7 @@ dependencies = [
     "opentelemetry-api>=1.28.0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.28.0",
     "opentelemetry-sdk>=1.28.0",
+    "pyyaml>=6.0.2",
     "uvicorn>=0.32.0",
 ]
 

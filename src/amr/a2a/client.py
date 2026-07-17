@@ -9,6 +9,7 @@ import httpx
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 
+from amr.cost import add_to_request_cost
 from amr.propagation import inject_into
 
 
@@ -47,7 +48,7 @@ class A2AClient:
         }
         with self.tracer.start_as_current_span(
             "a2a.call", kind=SpanKind.CLIENT, attributes=attributes
-        ):
+        ) as span:
             headers: dict[str, str] = {"content-type": "application/json"}
             inject_into(headers)
             try:
@@ -77,4 +78,14 @@ class A2AClient:
             result = payload.get("result")
             if not isinstance(result, dict):
                 raise A2AError("A2A peer returned a non-object result")
+            meta = result.get("_meta")
+            if isinstance(meta, dict):
+                cost_usd = meta.get("cost_usd")
+                if isinstance(cost_usd, (int, float)) and not isinstance(cost_usd, bool):
+                    # A hop owns the callee subtree once.  The same value is also
+                    # added to the enclosing server request so its parent can return
+                    # the complete subtree to its caller.
+                    normalized_cost = round(float(cost_usd), 4)
+                    span.set_attribute("agentmesh.cost.usd", normalized_cost)
+                    add_to_request_cost(normalized_cost)
             return result

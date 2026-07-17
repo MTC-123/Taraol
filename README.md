@@ -54,6 +54,27 @@ The repository commits Compose rendered by Foundry `v0.2.11` from
 `deploy/signoz/casting.yaml`, with SigNoz pinned to `v0.128.0`. Normal development only needs
 Docker Compose; see [the SigNoz deployment notes](deploy/signoz/README.md) to regenerate it.
 
+## Cost dashboards
+
+Import the three JSON files in `signoz/dashboards/` through **Dashboards → New dashboard →
+Import JSON**. They intentionally use span attributes and Query Builder sums, not a separate
+metric pipeline:
+
+- `cost-per-edge.json` sums `agentmesh.cost.usd` only on `a2a.call` CLIENT spans, grouped by
+  `agentmesh.src` and `peer.service`.
+- `cost-per-agent.json` sums direct chat-span cost by `service.name`.
+- `conversation-budget.json` sums direct chat-span cost by `gen_ai.conversation.id`; PLAN 05
+  should query this total for its authoritative budget threshold.
+
+An A2A server returns `result._meta.cost_usd`: its direct chat cost plus every downstream result
+cost. Its caller writes that number on the single hop span, so edge costs represent the callee
+subtree without double-counting. The edge dashboard also includes P95 latency and call rate from
+SigNoz's derived `signoz_latency_bucket` and `signoz_calls_total` metrics.
+
+The default demo model is `gpt-4.1-mini`; update `config/pricing.yaml` when changing the model or
+when provider pricing changes. Unknown models are explicitly tagged `agentmesh.cost.unpriced=true`
+with a USD cost of `0.0`.
+
 ## Credits
 
 Built on [SigNoz](https://signoz.io/),
@@ -64,5 +85,4 @@ Built on [SigNoz](https://signoz.io/),
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
-
 

@@ -6,5 +6,6 @@ ENV UV_CONCURRENT_DOWNLOADS=1
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 COPY agents ./agents
+COPY config ./config
 RUN uv sync --frozen --no-dev
 CMD ["uv", "run", "--no-sync", "python", "-m", "agents.router.main"]

@@ -23,7 +23,15 @@ def _estimate_tokens(text: str) -> int:
 
 def _fake_complete(prompt: str, model: str) -> LLMResult:
     text = f"[{model}] completed: {prompt.strip()[:80]}"
-    return LLMResult(text, _estimate_tokens(prompt), _estimate_tokens(text), model, "stop")
+    # The offline demo needs enough usage to make four-decimal USD rollups
+    # legible.  Real-provider mode always uses provider-reported counts.
+    return LLMResult(
+        text,
+        max(1000, _estimate_tokens(prompt)),
+        max(500, _estimate_tokens(text)),
+        model,
+        "stop",
+    )
 
 
 def _real_complete(prompt: str, model: str) -> LLMResult:

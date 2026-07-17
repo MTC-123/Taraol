@@ -14,7 +14,7 @@ from amr.llm import complete
 from amr.mesh import max_hops, next_targets
 
 logger = logging.getLogger(__name__)
-MODEL = os.environ.get("AMR_MODEL", "example-small")
+MODEL = os.environ.get("AMR_MODEL", "gpt-4.1-mini")
 
 
 def _target_url(target: str) -> str:
