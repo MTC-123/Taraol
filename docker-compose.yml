@@ -17,27 +17,90 @@ services:
         /signoz-otel-collector --config=/etc/otel-collector-config.yaml
         --copy-path=/var/tmp/collector-config.yaml
 
-  beta:
+  planner:
     build:
       context: .
-      dockerfile: agents/beta/Dockerfile
+      dockerfile: agents/planner/Dockerfile
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
-      OTEL_SERVICE_NAME: agent_beta
+      OTEL_SERVICE_NAME: planner
       OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
+      AMR_LLM: ${AMR_LLM:-fake}
+      AMR_MODEL: ${AMR_MODEL:-example-small}
+      AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
+      RESEARCHER_A2A_URL: http://researcher:8000/a2a
     networks:
       - signoz-network
 
-  alpha:
+  researcher:
     build:
       context: .
-      dockerfile: agents/alpha/Dockerfile
+      dockerfile: agents/researcher/Dockerfile
     depends_on:
-      - beta
+      - planner
     environment:
-      BETA_A2A_URL: http://beta:8001/a2a
       OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
-      OTEL_SERVICE_NAME: agent_alpha
+      OTEL_SERVICE_NAME: researcher
       OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
+      AMR_LLM: ${AMR_LLM:-fake}
+      AMR_MODEL: ${AMR_MODEL:-example-small}
+      AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
+      WRITER_A2A_URL: http://writer:8000/a2a
+    networks:
+      - signoz-network
+
+  writer:
+    build:
+      context: .
+      dockerfile: agents/writer/Dockerfile
+    depends_on:
+      - researcher
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
+      OTEL_SERVICE_NAME: writer
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
+      AMR_LLM: ${AMR_LLM:-fake}
+      AMR_MODEL: ${AMR_MODEL:-example-small}
+      AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
+      CRITIC_A2A_URL: http://critic:8000/a2a
+    networks:
+      - signoz-network
+
+  critic:
+    build:
+      context: .
+      dockerfile: agents/critic/Dockerfile
+    depends_on:
+      - writer
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
+      OTEL_SERVICE_NAME: critic
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
+      AMR_LLM: ${AMR_LLM:-fake}
+      AMR_MODEL: ${AMR_MODEL:-example-small}
+      AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
+      ROUTER_A2A_URL: http://router:8000/a2a
+      WRITER_A2A_URL: http://writer:8000/a2a
+    networks:
+      - signoz-network
+
+  router:
+    build:
+      context: .
+      dockerfile: agents/router/Dockerfile
+    depends_on:
+      - critic
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
+      OTEL_SERVICE_NAME: router
+      OTEL_TRACES_SAMPLER: parentbased_always_on
+      OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
+      AMR_LLM: ${AMR_LLM:-fake}
+      AMR_MODEL: ${AMR_MODEL:-example-small}
+      AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
     networks:
       - signoz-network

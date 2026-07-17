@@ -1,5 +1,6 @@
 """FastAPI JSON-RPC 2.0 A2A server with explicit context extraction."""
 
+import asyncio
 import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -51,7 +52,13 @@ class A2AServer:
                 span.set_status(Status(StatusCode.ERROR, "Method not found"))
                 return _error(request_id, -32601, "Method not found")
             try:
-                result = handler(params)
+                # Agent handlers make blocking HTTP calls to their peers.  Run
+                # synchronous handlers off the ASGI loop so a bounded cycle can
+                # re-enter this service (writer -> critic -> writer) safely.
+                if inspect.iscoroutinefunction(handler):
+                    result = await handler(params)
+                else:
+                    result = await asyncio.to_thread(handler, params)
                 if inspect.isawaitable(result):
                     result = await result
                 if not isinstance(result, dict):
