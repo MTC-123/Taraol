@@ -104,3 +104,26 @@ services:
       AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
     networks:
       - signoz-network
+
+  loop-watcher:
+    build:
+      context: .
+      dockerfile: detection/Dockerfile
+    depends_on:
+      - ingester
+      - signoz-signoz-0
+    environment:
+      SIGNOZ_URL: http://signoz-signoz-0:8080
+      SIGNOZ_API_KEY: ${SIGNOZ_API_KEY:-}
+      # Local-only fallback: avoids the SigNoz UI API key by using the private ClickHouse network.
+      SIGNOZ_CLICKHOUSE_URL: http://signoz-telemetrystore-clickhouse-0-0:8123
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
+      AMR_LOOP_WINDOW_SEC: ${AMR_LOOP_WINDOW_SEC:-30}
+      AMR_LOOP_MAX_REPEATS: ${AMR_LOOP_MAX_REPEATS:-3}
+      AMR_BUDGET_USD: ${AMR_BUDGET_USD:-0.01}
+      AMR_POLL_INTERVAL_SEC: ${AMR_POLL_INTERVAL_SEC:-5}
+      AMR_BUDGET_LOOKBACK_SEC: ${AMR_BUDGET_LOOKBACK_SEC:-3600}
+      AMR_SIGNAL_COOLDOWN_SEC: ${AMR_SIGNAL_COOLDOWN_SEC:-60}
+    restart: unless-stopped
+    networks:
+      - signoz-network
