@@ -2,6 +2,9 @@
 
 import asyncio
 import inspect
+import os
+import threading
+import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -17,14 +20,58 @@ Handler = Callable[[dict[str, Any]], dict[str, Any] | Awaitable[dict[str, Any]]]
 
 
 class A2AServer:
-    def __init__(self, *, tracer: trace.Tracer | None = None) -> None:
+    def __init__(
+        self, *, tracer: trace.Tracer | None = None, clock: Callable[[], float] = time.monotonic
+    ) -> None:
         self.tracer = tracer or trace.get_tracer("amr.a2a.server")
         self.handlers: dict[str, Handler] = {}
+        self._clock = clock
+        self._paused: dict[str, float] = {}
+        self._pause_lock = threading.Lock()
         self.app = FastAPI()
         self.app.post("/a2a")(self._handle)
+        self.app.post("/control/pause")(self._pause)
+        self.app.post("/control/resume")(self._resume)
 
     def register(self, method: str, handler: Handler) -> None:
         self.handlers[method] = handler
+
+    def _is_paused(self, conversation_id: str) -> bool:
+        with self._pause_lock:
+            expires_at = self._paused.get(conversation_id)
+            if expires_at is None:
+                return False
+            if expires_at <= self._clock():
+                del self._paused[conversation_id]
+                return False
+            return True
+
+    async def _pause(self, request: Request) -> dict[str, Any]:
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        conversation_id = body.get("conversation_id") if isinstance(body, dict) else None
+        if not isinstance(conversation_id, str) or not conversation_id:
+            return {"status": "invalid", "detail": "conversation_id is required"}
+        ttl = int(os.environ.get("AMR_PAUSE_TTL_SEC", "300"))
+        if ttl <= 0:
+            return {"status": "invalid", "detail": "AMR_PAUSE_TTL_SEC must be positive"}
+        with self._pause_lock:
+            self._paused[conversation_id] = self._clock() + ttl
+        return {"status": "paused", "conversation_id": conversation_id, "ttl_sec": ttl}
+
+    async def _resume(self, request: Request) -> dict[str, Any]:
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        conversation_id = body.get("conversation_id") if isinstance(body, dict) else None
+        if not isinstance(conversation_id, str) or not conversation_id:
+            return {"status": "invalid", "detail": "conversation_id is required"}
+        with self._pause_lock:
+            was_paused = self._paused.pop(conversation_id, None) is not None
+        return {"status": "resumed", "conversation_id": conversation_id, "was_paused": was_paused}
 
     async def _handle(self, request: Request) -> dict[str, Any]:
         try:
@@ -40,6 +87,20 @@ class A2AServer:
         params = body.get("params", {})
         if not isinstance(method, str) or not isinstance(params, dict):
             return _error(request_id, -32600, "Invalid Request")
+
+        # This must run before invoking the work handler: an honest pause never
+        # opens an agent/chat/tool span or delegates to another service.
+        conversation_id = params.get("conversation_id")
+        if (
+            method == "work"
+            and isinstance(conversation_id, str)
+            and self._is_paused(conversation_id)
+        ):
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"status": "paused", "conversation_id": conversation_id},
+            }
 
         context = extract_from(request.headers)
         with self.tracer.start_as_current_span(
@@ -82,10 +143,12 @@ def _error(request_id: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
 
-def create_app(*, tracer: trace.Tracer | None = None) -> A2AServer:
+def create_app(
+    *, tracer: trace.Tracer | None = None, clock: Callable[[], float] = time.monotonic
+) -> A2AServer:
     """Create a registrable A2A server instance."""
 
-    return A2AServer(tracer=tracer)
+    return A2AServer(tracer=tracer, clock=clock)
 
 
 def run(service_name: str, port: int, server: A2AServer) -> None:

@@ -1,0 +1,49 @@
+"""Small HTTP client for the agents' conversation control endpoints."""
+
+from collections.abc import Mapping
+from typing import Any, Protocol
+
+import httpx
+
+
+class _HttpClient(Protocol):
+    def post(self, url: str, **kwargs: Any) -> httpx.Response: ...
+
+
+class ControlClient:
+    def __init__(
+        self, agent_urls: Mapping[str, str], *, http_client: _HttpClient | None = None
+    ) -> None:
+        self.agent_urls = dict(agent_urls)
+        self.http_client = http_client or httpx
+
+    def _call(
+        self, action: str, agent: str, conversation_id: str, **context: str
+    ) -> dict[str, Any]:
+        base_url = self.agent_urls.get(agent)
+        if not base_url:
+            raise ValueError(f"no control URL configured for agent {agent!r}")
+        payload = {"conversation_id": conversation_id} | {
+            key: value for key, value in context.items() if value
+        }
+        try:
+            response = self.http_client.post(
+                f"{base_url.rstrip('/')}/control/{action}", json=payload, timeout=5.0
+            )
+            response.raise_for_status()
+            body = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise RuntimeError(f"agent {agent} {action} failed: {exc}") from exc
+        if not isinstance(body, dict):
+            raise RuntimeError(f"agent {agent} {action} returned a non-object response")
+        return body
+
+    def pause(
+        self, agent: str, conversation_id: str, *, reason: str, trace_id: str
+    ) -> dict[str, Any]:
+        return self._call("pause", agent, conversation_id, reason=reason, trace_id=trace_id)
+
+    def resume(
+        self, agent: str, conversation_id: str, *, reason: str, trace_id: str
+    ) -> dict[str, Any]:
+        return self._call("resume", agent, conversation_id, reason=reason, trace_id=trace_id)

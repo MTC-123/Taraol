@@ -6,6 +6,12 @@ include:
   - path: ./deploy/signoz/pours/deployment/compose.yaml
 
 services:
+  # Persist a local JWT signing key outside version control. This keeps browser
+  # sessions valid across restarts and avoids SigNoz's insecure fallback.
+  signoz-signoz-0:
+    environment:
+      SIGNOZ_TOKENIZER_JWT_SECRET: ${SIGNOZ_TOKENIZER_JWT_SECRET:?set in .env}
+
   # Run the committed static receiver/exporter pipelines directly. The bundled
   # OpAMP manager otherwise starts with a no-op default pipeline before a UI
   # configuration is supplied, which rejects local OTLP traffic.
@@ -30,6 +36,9 @@ services:
       AMR_MODEL: ${AMR_MODEL:-gpt-4.1-mini}
       AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
       RESEARCHER_A2A_URL: http://researcher:8000/a2a
+    ports:
+      # The planner is the demo's single host entry point; all later hops stay private.
+      - "${AMR_PLANNER_PORT:-8000}:8000"
     networks:
       - signoz-network
 
@@ -124,6 +133,29 @@ services:
       AMR_POLL_INTERVAL_SEC: ${AMR_POLL_INTERVAL_SEC:-5}
       AMR_BUDGET_LOOKBACK_SEC: ${AMR_BUDGET_LOOKBACK_SEC:-3600}
       AMR_SIGNAL_COOLDOWN_SEC: ${AMR_SIGNAL_COOLDOWN_SEC:-60}
+    restart: unless-stopped
+    networks:
+      - signoz-network
+
+  controller:
+    build:
+      context: .
+      dockerfile: detection/Dockerfile
+    command: ["uv", "run", "--no-sync", "python", "-m", "detection.controller"]
+    depends_on:
+      - ingester
+      - writer
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
+      AMR_ENFORCE: ${AMR_ENFORCE:-auto}
+      AMR_ALERT_COOLDOWN_SEC: ${AMR_ALERT_COOLDOWN_SEC:-60}
+      PLANNER_CONTROL_URL: http://planner:8000
+      RESEARCHER_CONTROL_URL: http://researcher:8000
+      WRITER_CONTROL_URL: http://writer:8000
+      CRITIC_CONTROL_URL: http://critic:8000
+      ROUTER_CONTROL_URL: http://router:8000
+    ports:
+      - "${AMR_CONTROLLER_PORT:-8002}:8000"
     restart: unless-stopped
     networks:
       - signoz-network

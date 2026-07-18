@@ -90,10 +90,40 @@ def trace_query(trace_id: str) -> dict[str, Any]:
                 _field("name"),
                 _field("service.name", "resource"),
                 _field("gen_ai.conversation.id"),
-                _field("agentmesh.src"), _field("peer.service"), _field("agentmesh.cost.usd"),
+                _field("agentmesh.src"),
+                _field("peer.service"),
+                _field("agentmesh.cost.usd"),
             ],
             "disabled": False,
             "limit": 1000,
+        },
+    }
+
+
+def audit_query(trace_id: str) -> dict[str, Any]:
+    escaped = trace_id.replace("'", "\\'")
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "audit_events",
+            "signal": "logs",
+            "filter": {
+                "expression": (
+                    f"trace_id = '{escaped}' AND (event = 'agent_paused' OR body = 'agent_paused')"
+                )
+            },
+            "selectFields": [
+                _field("trace_id"),
+                _field("body"),
+                _field("event"),
+                _field("conversation_id"),
+                _field("agent"),
+                _field("reason"),
+                _field("alert_name"),
+                _field("enforcement_mode"),
+            ],
+            "disabled": False,
+            "limit": 100,
         },
     }
 
@@ -133,13 +163,19 @@ class SigNozClient:
             raise SigNozQueryError(f"SigNoz query failed: {exc}") from exc
         return self._rows(body)
 
-    def get_trace(
+    def get_trace(self, trace_id: str, time_range: TimeRange | None = None) -> list[dict[str, Any]]:
+        if time_range is None:
+            end_ms = int(time.time() * 1000)
+            time_range = TimeRange(end_ms - 86_400_000, end_ms)
+        return self.run_builder_query(trace_query(trace_id), time_range)
+
+    def get_audit_events(
         self, trace_id: str, time_range: TimeRange | None = None
     ) -> list[dict[str, Any]]:
         if time_range is None:
             end_ms = int(time.time() * 1000)
             time_range = TimeRange(end_ms - 86_400_000, end_ms)
-        return self.run_builder_query(trace_query(trace_id), time_range)
+        return self.run_builder_query(audit_query(trace_id), time_range)
 
     @staticmethod
     def _rows(body: Any) -> list[dict[str, Any]]:
@@ -182,9 +218,7 @@ class ClickHouseClient:
         # nanosecond scale. The watcher only queries trailing windows, so anchor that
         # interval on ClickHouse's clock and avoid a lossy client/server clock conversion.
         window_sec = max(1, (time_range.end_ms - time_range.start_ms + 999) // 1000)
-        return (
-            f"timestamp >= now64(9) - toIntervalSecond({window_sec}) AND timestamp <= now64(9)"
-        )
+        return f"timestamp >= now64(9) - toIntervalSecond({window_sec}) AND timestamp <= now64(9)"
 
     def run_builder_query(
         self, query: Mapping[str, Any], time_range: TimeRange
@@ -203,13 +237,19 @@ class ClickHouseClient:
         except (httpx.HTTPError, ValueError) as exc:
             raise SigNozQueryError(f"ClickHouse watcher query failed: {exc}") from exc
 
-    def get_trace(
+    def get_trace(self, trace_id: str, time_range: TimeRange | None = None) -> list[dict[str, Any]]:
+        if time_range is None:
+            end_ms = int(time.time() * 1000)
+            time_range = TimeRange(end_ms - 86_400_000, end_ms)
+        return self.run_builder_query(trace_query(trace_id), time_range)
+
+    def get_audit_events(
         self, trace_id: str, time_range: TimeRange | None = None
     ) -> list[dict[str, Any]]:
         if time_range is None:
             end_ms = int(time.time() * 1000)
             time_range = TimeRange(end_ms - 86_400_000, end_ms)
-        return self.run_builder_query(trace_query(trace_id), time_range)
+        return self.run_builder_query(audit_query(trace_id), time_range)
 
     def _sql(self, name: str, spec: Mapping[str, Any], time_range: TimeRange) -> str:
         bounded = self._seconds(time_range)
@@ -256,11 +296,25 @@ class ClickHouseClient:
             escaped = trace_id.replace("'", "\\'")
             return f"""
                 SELECT trace_id, span_id, parent_span_id,
-                       toUnixTimestamp64Nano(timestamp) AS timestamp,
-                       name, resource.service.name::String AS serviceName,
+                       timestamp,
+                       name, resources_string['service.name'] AS serviceName,
                        attributes_string AS attributes
                 FROM {self._TABLE}
                 WHERE {bounded} AND trace_id = '{escaped}'
                 ORDER BY timestamp, span_id
+            """
+        if name == "audit_events":
+            expression = spec.get("filter", {})
+            if not isinstance(expression, Mapping) or not isinstance(
+                expression.get("expression"), str
+            ):
+                raise SigNozQueryError("audit query has no filter expression")
+            trace_id = expression["expression"].split("'", 2)[1].replace("\\'", "'")
+            escaped = trace_id.replace("'", "\\'")
+            return f"""
+                SELECT trace_id, body, attributes_string AS attributes
+                FROM signoz_logs.distributed_logs_v2
+                WHERE trace_id = '{escaped}' AND body = 'agent_paused'
+                ORDER BY timestamp
             """
         raise SigNozQueryError(f"unsupported ClickHouse watcher query: {name}")

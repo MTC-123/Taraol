@@ -75,6 +75,16 @@ The default demo model is `gpt-4.1-mini`; update `config/pricing.yaml` when chan
 when provider pricing changes. Unknown models are explicitly tagged `agentmesh.cost.unpriced=true`
 with a USD cost of `0.0`.
 
+## Grounded loop explanation
+
+`mcp_tool.server` exposes `explain_this_loop(trace_id)` for an MCP host. It obtains the trace
+read-only from SigNoz and returns observed cyclic agents, A2A hop count, and direct-chat cost.
+A pause action is deliberately `null` unless an audit-log lookup establishes it; the tool never
+manufactures enforcement facts from topology alone.
+
+Start the MCP endpoint with `uv run python -m mcp_tool.server`; its command-line equivalent is
+`uv run amr explain <trace-id>`.
+
 ## Credits
 
 Built on [SigNoz](https://signoz.io/),
