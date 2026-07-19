@@ -4,8 +4,8 @@
   "severity": "critical",
   "version": "v5",
   "rule_type": "threshold_rule",
-  "eval_window": "1m0s",
-  "frequency": "1m0s",
+  "eval_window": "30s",
+  "frequency": "10s",
   "description": "Pause candidate: conversation=$conversation_id edge=$edge trace=$trace_id; count={{$value}}",
   "summary": "Agent mesh loop detected for $conversation_id",
   "labels": {
@@ -35,6 +35,6 @@
       "spec": [{"name": "critical", "target": 0, "op": "1", "matchType": "1", "channels": ["agentmesh-controller"]}]
     }
   },
-  "evaluation": {"kind": "rolling", "spec": {"evalWindow": "1m0s", "frequency": "1m0s", "matchType": "at_least_once"}},
+  "evaluation": {"kind": "rolling", "spec": {"evalWindow": "30s", "frequency": "10s", "matchType": "at_least_once"}},
   "notification_settings": {"group_by": ["conversation_id", "edge", "trace_id"], "use_policy": true}
 }

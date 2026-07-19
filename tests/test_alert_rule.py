@@ -14,11 +14,12 @@ def _spec(rule: dict[str, object]) -> dict[str, object]:
     return query["spec"]
 
 
-def test_loop_rule_is_a_contextual_one_minute_log_alert() -> None:
+def test_loop_rule_is_a_contextual_fast_log_alert() -> None:
     rule = _rule("loop-detected")
     spec = _spec(rule)
     assert rule["alert_type"] == "LOGS_BASED_ALERT"
-    assert rule["eval_window"] == "1m0s"
+    assert rule["eval_window"] == "30s"
+    assert rule["frequency"] == "10s"
     assert spec["signal"] == "logs"
     assert spec["filter"]["expression"] == "signal = 'loop_detected'"
     assert spec["aggregations"][0]["expression"] == "count()"
