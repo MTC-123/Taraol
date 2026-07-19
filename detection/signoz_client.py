@@ -298,7 +298,8 @@ class ClickHouseClient:
                 SELECT trace_id, span_id, parent_span_id,
                        timestamp,
                        name, resources_string['service.name'] AS serviceName,
-                       attributes_string AS attributes
+                       attributes_string AS attributes,
+                       attributes_number AS attributes_number
                 FROM {self._TABLE}
                 WHERE {bounded} AND trace_id = '{escaped}'
                 ORDER BY timestamp, span_id

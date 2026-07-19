@@ -1,0 +1,6 @@
+# Demo-only overlay used by `make demo`: exposes ClickHouse on localhost so the
+# beat can be verified without a SigNoz API key. Do not use on shared hosts.
+services:
+  signoz-telemetrystore-clickhouse-0-0:
+    ports:
+      - "127.0.0.1:8123:8123"

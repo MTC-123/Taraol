@@ -1,4 +1,4 @@
-.PHONY: up down test lint fmt demo verify-demo terraform-validate dashboard-validate
+.PHONY: up down test lint fmt demo demo-full verify-demo terraform-validate dashboard-validate
 
 up:
 	docker compose --profile mcp up -d
@@ -17,6 +17,9 @@ fmt:
 
 demo:
 	uv run python scripts/demo.py
+
+demo-full:
+	uv run python scripts/demo.py --full
 
 verify-demo: demo
 
