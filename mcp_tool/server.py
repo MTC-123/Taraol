@@ -1,24 +1,15 @@
 """Minimal stdio MCP server for grounded loop explanations."""
 
-import os
 from typing import Any
 
 from amr.explain import explain_trace
-from detection.signoz_client import ClickHouseClient, SigNozClient
+from amr.mcp_client import SigNozMCPClient
 
 
 def explain_this_loop(trace_id: str) -> dict[str, Any]:
     """Fetch a real trace from SigNoz and return traceable loop facts."""
 
-    clickhouse_url = os.environ.get("SIGNOZ_CLICKHOUSE_URL")
-    client = (
-        ClickHouseClient(clickhouse_url)
-        if clickhouse_url
-        else SigNozClient(
-            os.environ.get("SIGNOZ_URL", "http://localhost:8080"),
-            os.environ.get("SIGNOZ_API_KEY", ""),
-        )
-    )
+    client = SigNozMCPClient()
     try:
         return explain_trace(
             trace_id, client.get_trace(trace_id), client.get_audit_events(trace_id)
