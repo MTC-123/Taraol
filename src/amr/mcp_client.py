@@ -53,9 +53,7 @@ def _audit_query(trace_id: str) -> dict[str, Any]:
         "spec": {
             "name": "audit_events",
             "signal": "logs",
-            "filter": {
-                "expression": f"trace_id = '{escaped}' AND body = 'agent_paused'"
-            },
+            "filter": {"expression": f"trace_id = '{escaped}' AND body = 'agent_paused'"},
             "selectFields": [
                 {"name": "trace_id", "fieldContext": "log"},
                 {"name": "body", "fieldContext": "log"},
@@ -157,11 +155,28 @@ class SigNozMCPClient:
         """Match the detector client protocol; HTTP sessions are per call."""
 
 
+def _cycle_only(agents: list[str]) -> str:
+    """Reduce a detector path to its repeating cycle for display."""
+
+    first_seen: dict[str, int] = {}
+    for index, agent in enumerate(agents):
+        previous = first_seen.get(agent)
+        if previous is not None:
+            return " → ".join(agents[previous : index + 1])
+        first_seen[agent] = index
+    return " → ".join(agents)
+
+
 def format_explanation(facts: Mapping[str, Any]) -> str:
     """Human-readable terminal output for the post-incident beat."""
 
     cycles = facts.get("cycles", [])
-    paths = [" → ".join(item.get("agents", [])) for item in cycles if isinstance(item, Mapping)]
+    # Detector paths share long acyclic prefixes; show each distinct cycle once.
+    paths = list(
+        dict.fromkeys(
+            _cycle_only(item.get("agents", [])) for item in cycles if isinstance(item, Mapping)
+        )
+    )
     pause = facts.get("pause_action")
     pause_text = "observed" if pause else "not observed"
     return "\n".join(

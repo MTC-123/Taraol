@@ -27,10 +27,10 @@ def edges() -> tuple[tuple[str, str], ...]:
 def next_targets(agent: str) -> list[str]:
     """Return the configured direct callees for an agent in the current mode."""
 
-    # In loop demos the critic deliberately routes back to the writer.  The normal
-    # critic->router edge remains declarative (and visible in the off-mode map).
+    # In loop demos the critic deliberately routes back to the writer first, then
+    # still notifies the router, so all five services appear in the loop trace.
     if agent == "critic" and loop_mode() in {"on", "storm"}:
-        return ["writer"]
+        return ["writer", "router"]
     return [target for source, target in edges() if source == agent]
 
 

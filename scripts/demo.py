@@ -22,6 +22,11 @@ from amr.explain import explain_trace
 from amr.mcp_client import SigNozMCPClient, format_explanation
 from detection.signoz_client import ClickHouseClient, TimeRange, conversation_cost_query
 
+# The post-mortem uses characters (e.g. "→") that Windows' legacy cp1252
+# console encoding cannot print.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 CLICKHOUSE_URL = "http://localhost:8123"
 PLANNER_URL = "http://localhost:8000"
 CONTROLLER_URL = "http://localhost:8002"
@@ -62,11 +67,16 @@ def start_conversation() -> tuple[str, str]:
     return conversation, trace_id
 
 
-def verify_mesh(facts: dict[str, Any]) -> None:
+def mesh_facts(trace_id: str, rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    # Spans ingest asynchronously; treat a partial trace as "not yet", not failure.
+    if not rows:
+        return None
+    facts = explain_trace(trace_id, rows, ())
     if set(facts["services"]) != {"planner", "researcher", "writer", "critic", "router"}:
-        fail(f"unexpected service mesh: {facts['services']}")
-    if "writer" not in facts["cyclic_agents"] or "critic" not in facts["cyclic_agents"]:
-        fail("storm trace did not include the writer/critic cycle")
+        return None
+    if not {"writer", "critic"} <= set(facts["cyclic_agents"]):
+        return None
+    return facts
 
 
 def finish(start: float, timeout: int, conversation: str, facts: dict[str, Any]) -> None:
@@ -126,12 +136,27 @@ def run_local(timeout: int) -> None:
         # bootable; put a stable one in .env to keep browser sessions valid.
         env["SIGNOZ_TOKENIZER_JWT_SECRET"] = uuid4().hex
         print("note: generated a throwaway SIGNOZ_TOKENIZER_JWT_SECRET; set one in .env to persist")
-    subprocess.run(
-        ["docker", "compose", "-f", "docker-compose.yml", "-f", "docker-compose.demo.yml",
-         "up", "-d", "--wait"],
-        check=True,
+    up = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.yml",
+            "-f",
+            "docker-compose.demo.yml",
+            "up",
+            "-d",
+            "--build",
+            "--wait",
+        ],
+        check=False,
         env=env,
     )
+    if up.returncode != 0:
+        # `--wait` reports SigNoz's one-shot init containers (migrator, user
+        # scripts) as failures once they exit; the readiness probes below are
+        # the real gate.
+        print("note: compose --wait returned nonzero; verifying readiness directly")
     client = ClickHouseClient(CLICKHOUSE_URL)
     wait_for(
         lambda: httpx.get(f"{CLICKHOUSE_URL}/ping", timeout=5).text.strip() == "Ok.",
@@ -147,10 +172,11 @@ def run_local(timeout: int) -> None:
     conversation, trace_id = start_conversation()
     start = time.monotonic()
     deadline = start + timeout
-    rows = wait_for(
-        lambda: merge_number_attributes(client.get_trace(trace_id)), "five-agent trace", deadline
+    wait_for(
+        lambda: mesh_facts(trace_id, merge_number_attributes(client.get_trace(trace_id))),
+        "five-agent trace with the writer/critic cycle",
+        deadline,
     )
-    verify_mesh(explain_trace(trace_id, rows, ()))
     cue("NOW: click the red critic -> writer edge; open the demo-loop-* trace waterfall")
     signal = wait_for(
         lambda: clickhouse_signal(conversation), "loop-watcher loop_detected signal", deadline
@@ -206,7 +232,9 @@ def run_full(timeout: int) -> None:
         "TF_VAR_signoz_api_key": api_key,
     }
     subprocess.run(
-        ["docker", "compose", "--profile", "mcp", "up", "-d", "--wait"], check=True, env=env
+        ["docker", "compose", "--profile", "mcp", "up", "-d", "--build", "--wait"],
+        check=True,
+        env=env,
     )
     subprocess.run(
         ["terraform", "-chdir=signoz/terraform", "init", "-backend=false"], check=True, env=env
@@ -226,9 +254,11 @@ def run_full(timeout: int) -> None:
     conversation, trace_id = start_conversation()
     start = time.monotonic()
     deadline = start + timeout
-    rows = wait_for(lambda: client.get_trace(trace_id), "five-agent trace", deadline)
-    facts = explain_trace(trace_id, rows, ())
-    verify_mesh(facts)
+    facts = wait_for(
+        lambda: mesh_facts(trace_id, client.get_trace(trace_id)),
+        "five-agent trace with the writer/critic cycle",
+        deadline,
+    )
     cue("NOW: click the red critic -> writer edge; open the demo-loop-* trace waterfall")
     before = facts["direct_chat_cost_usd"]
     audit = wait_for(
