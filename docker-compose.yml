@@ -159,3 +159,19 @@ services:
     restart: unless-stopped
     networks:
       - signoz-network
+
+  signoz-mcp:
+    image: signoz/signoz-mcp-server:v0.1.0
+    profiles: ["mcp"]
+    depends_on:
+      - signoz-signoz-0
+    environment:
+      TRANSPORT_MODE: http
+      MCP_SERVER_PORT: 8000
+      SIGNOZ_URL: http://signoz-signoz-0:8080
+      LOG_LEVEL: info
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
+    ports:
+      - "${SIGNOZ_MCP_PORT:-8003}:8000"
+    networks:
+      - signoz-network

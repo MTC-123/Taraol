@@ -6,9 +6,11 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import Request
+from opentelemetry import trace
 from opentelemetry.trace import Tracer
 
 from amr.a2a import A2AClient, A2AError, A2AServer
+from amr.events import reasoning_event
 from amr.genai import agent_span, chat_span, record_chat_result, tool_span
 from amr.llm import complete
 from amr.mesh import max_hops, next_targets
@@ -28,10 +30,19 @@ def register_agent(server: A2AServer, name: str, tracer: Tracer) -> None:
         conversation_id = str(payload.get("conversation_id") or uuid4())
         hops = int(payload.get("hops", 0))
         with agent_span(tracer, name, conversation_id):
+            reasoning_event(name, conversation_id, "received", hop=hops)
             prompt = f"{name} handling conversation {conversation_id}, hop {hops}"
             with chat_span(tracer, MODEL) as span:
                 result = complete(prompt, MODEL)
                 record_chat_result(span, result)
+            reasoning_event(
+                name,
+                conversation_id,
+                "completed",
+                hop=hops,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+            )
 
             if name == "researcher":
                 # This is intentionally metadata-only: no prompt/tool output is captured.
@@ -51,7 +62,16 @@ def register_agent(server: A2AServer, name: str, tracer: Tracer) -> None:
                         delegated.append(target)
                     except A2AError:
                         logger.exception("%s could not call %s", name, target)
-            return {"agent": name, "conversation_id": conversation_id, "delegated": delegated}
+            reasoning_event(
+                name, conversation_id, "delegated", hop=hops, targets=",".join(delegated)
+            )
+            trace_id = f"{trace.get_current_span().get_span_context().trace_id:032x}"
+            return {
+                "agent": name,
+                "conversation_id": conversation_id,
+                "delegated": delegated,
+                "_meta": {"trace_id": trace_id},
+            }
 
     server.register("work", work)
 

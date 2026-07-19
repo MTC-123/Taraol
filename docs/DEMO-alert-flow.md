@@ -1,4 +1,7 @@
-# Live alert-to-pause demo
+# Legacy alert-to-pause notes
+
+The canonical current runbook is [DEMO.md](DEMO.md). These notes remain for the
+approval-mode and manual-recovery details below.
 
 ## One-time SigNoz UI setup
 
@@ -10,11 +13,10 @@
 3. Go to **Alerts → Configurations → Routing Policies** and add policy
    `agentmesh-controller`: expression `amr.enforcement = "controller"`, channel
    `agentmesh-controller`.
-4. Go to **Alerts → Alert Rules → New Alert → Logs**. Create each rule from its committed
-   JSON definition in `signoz/alerts/`: select the log field `signal`, count rows, group by the
-   listed attributes, set a `> 0` threshold with **At least once** over one minute, enable the
-   routing policy, and save. Export the saved rules read-only, sanitize instance IDs/timestamps,
-   and replace the committed JSON with that export.
+4. Apply the committed rules and routing policy through Terraform (`make demo`). The official
+   provider does not create notification channels, so the webhook in step 2 remains the one-time
+   UI action. Export saved rules read-only, sanitize instance IDs/timestamps, and replace the
+   committed JSON with that export.
 
 ## Auto-mode live beat
 

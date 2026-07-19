@@ -1,5 +1,6 @@
 .env
 .venv/
+.terraform/
 __pycache__/
 *.py[cod]
 *.log
@@ -11,5 +12,4 @@ htmlcov/
 dist/
 build/
 *.egg-info/
-
 

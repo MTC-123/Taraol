@@ -6,9 +6,8 @@ Agent Mesh Radar is an OpenTelemetry-first demo that turns agent-to-agent traffi
 observable service mesh, then layers cost, loop detection, and an explain-this-loop MCP tool
 on top.
 
-> Demo GIF placeholder — added in PLAN 07.
-
-> Architecture diagram placeholder — added in PLAN 07.
+The live, timed demo runbook is [docs/DEMO.md](docs/DEMO.md). Record the verified
+browser beat as `docs/evidence/demo-beat.mp4` plus `docs/evidence/demo-beat.gif`.
 
 ## Quickstart
 
@@ -24,6 +23,11 @@ Start the complete observability stack:
 ```sh
 make up
 ```
+
+`make up` starts the local official SigNoz MCP server without a stored secret.
+For Terraform-managed alert provisioning and live MCP queries, SigNoz requires a
+supported credential; see [docs/DEMO.md](docs/DEMO.md). Then run `make demo` for
+the bounded incident beat.
 
 Open [http://localhost:8080](http://localhost:8080). The bundled collector accepts OTLP gRPC
 on `localhost:4317` and OTLP HTTP on `localhost:4318`.
@@ -57,8 +61,9 @@ Docker Compose; see [the SigNoz deployment notes](deploy/signoz/README.md) to re
 ## Cost dashboards
 
 Import the three JSON files in `signoz/dashboards/` through **Dashboards → New dashboard →
-Import JSON**. They intentionally use span attributes and Query Builder sums, not a separate
-metric pipeline:
+Import JSON**. Each asks one question, keeps the primary KPI top-left, uses USD to four decimal
+places, and applies green/amber/red thresholds. They intentionally use span attributes and Query
+Builder sums, not a separate metric pipeline:
 
 - `cost-per-edge.json` sums `agentmesh.cost.usd` only on `a2a.call` CLIENT spans, grouped by
   `agentmesh.src` and `peer.service`.
@@ -77,13 +82,15 @@ with a USD cost of `0.0`.
 
 ## Grounded loop explanation
 
-`mcp_tool.server` exposes `explain_this_loop(trace_id)` for an MCP host. It obtains the trace
-read-only from SigNoz and returns observed cyclic agents, A2A hop count, and direct-chat cost.
+`mcp_tool.server` exposes `explain_this_loop(trace_id)` for an MCP host. It calls the official
+local SigNoz MCP server's read-only query tool—not ClickHouse or a direct SigNoz REST path—and
+returns observed cyclic agents, A2A hop count, and direct-chat cost.
 A pause action is deliberately `null` unless an audit-log lookup establishes it; the tool never
 manufactures enforcement facts from topology alone.
 
 Start the MCP endpoint with `uv run python -m mcp_tool.server`; its command-line equivalent is
-`uv run amr explain <trace-id>`.
+`uv run amr explain <trace-id>`, which formats a readable incident post-mortem rather than dumping
+raw JSON.
 
 ## Credits
 

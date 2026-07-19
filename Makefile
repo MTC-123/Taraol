@@ -1,7 +1,7 @@
-.PHONY: up down test lint fmt demo
+.PHONY: up down test lint fmt demo verify-demo terraform-validate dashboard-validate
 
 up:
-	docker compose up -d
+	docker compose --profile mcp up -d
 
 down:
 	docker compose down -v
@@ -16,6 +16,13 @@ fmt:
 	uv run ruff format .
 
 demo:
-	@echo "PLAN 02 supplies the instrumented demo. Start the observability stack with: make up"
+	uv run python scripts/demo.py
 
+verify-demo: demo
 
+terraform-validate:
+	terraform -chdir=signoz/terraform init -backend=false
+	terraform -chdir=signoz/terraform validate
+
+dashboard-validate:
+	uv run python scripts/validate_artifacts.py
