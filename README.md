@@ -2,19 +2,35 @@
 
 **See the hidden shape of a multi-agent system before a loop becomes an outage.**
 
-Agent Mesh Radar is an OpenTelemetry-first demo that turns agent-to-agent traffic into an
-observable service mesh, then layers cost, loop detection, and an explain-this-loop MCP tool
-on top.
+![The five-agent mesh in SigNoz's Service Map](docs/evidence/service-map-full-mesh.png)
+<!-- Swap for docs/evidence/demo-beat.gif once the live beat is recorded (docs/DEMO.md, Recovery and evidence). -->
 
-The live, timed demo runbook is [docs/DEMO.md](docs/DEMO.md). Record the verified
-browser beat as `docs/evidence/demo-beat.mp4` plus `docs/evidence/demo-beat.gif`.
+Agent Mesh Radar is an OpenTelemetry-first demo that turns agent-to-agent traffic into an
+observable service mesh, then layers cost-per-edge, loop detection, an alert that pauses the
+runaway agent, and an explain-this-loop MCP tool on top. `make demo` plays the whole
+incident — cost climbs, edge turns red, alert fires, agent pauses, cost flatlines,
+post-mortem prints — in under 90 seconds. The timed runbook is [docs/DEMO.md](docs/DEMO.md).
+
+## Why this doesn't already exist
+
+- **Live topology, not an execution graph.** Tools like Galileo aggregate one application's
+  internal step graph across runs. This is a live network topology of *separate agent
+  processes*, derived from vendor-neutral OpenTelemetry traces — any A2A-speaking agent that
+  propagates `traceparent` shows up, regardless of framework or vendor.
+- **The blind spot is real.** Agent-*to*-agent topology is unaddressed across the current
+  observability landscape; even the A2A protocol lists tracing and monitoring as a stated
+  but unmet goal.
+- **The map comes for free.** The Service Map is derived by SigNoz from ordinary trace
+  parent/child relationships plus `service.name` — no custom UI was built. Our work is what
+  we layer on it: cost per edge, two-tier loop detection, enforcement, and explanation.
 
 ## Quickstart
 
 ### Prerequisites
 
-- WSL 2 with a native Docker Engine and Docker Compose v2. SigNoz documents Docker Desktop
-  on native Windows as unreliable for ClickHouse Keeper.
+- WSL 2 with a native Docker Engine and Docker Compose v2.20+ (the compose file uses
+  `include`). SigNoz documents Docker Desktop on native Windows as unreliable for
+  ClickHouse Keeper.
 - At least 4 GB of Docker memory (8 GB recommended).
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) for Python tooling.
 
@@ -51,6 +67,25 @@ reproducible workflow.
 - **Shared foundation** (`src/amr/`) — small cross-cutting helpers with no layer coupling.
 
 Layers never import each other’s internals; they communicate through OTLP, HTTP, and SigNoz.
+The full diagram and data flow are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md);
+`tests/test_detection_architecture.py` enforces the boundary.
+
+## Six signals, all live
+
+Every SigNoz signal is exercised by the demo, not merely configured
+(`tests/test_six_signals.py` asserts each one):
+
+| Signal | How we use it |
+|---|---|
+| Traces | One distributed trace per conversation across five named agent services, W3C `traceparent` on every A2A hop; the writer↔critic cycle is visible in the waterfall |
+| Metrics | SigNoz-derived RED metrics (`signoz_calls_total`, `signoz_latency_bucket`) drive edge call-rate and P95 latency on the cost-per-edge dashboard |
+| Logs | Trace-correlated `agent_reasoning`, `loop_detected`, and `agent_paused` events, filterable by `trace_id` and `conversation_id` |
+| Dashboards | Three focused JSON exports: cost per edge, cost per agent, conversation budget |
+| Alerts | Loop and budget rules plus a route policy, provisioned via the official Terraform provider; the webhook drives the controller's pause |
+| MCP | `explain_this_loop(trace_id)` queries the official SigNoz MCP server and returns a grounded post-mortem |
+
+Plus the headline: the **Service Map** itself is derived by SigNoz from trace
+parent/child + `service.name` — the agent mesh renders with zero custom UI.
 
 ## SigNoz deployment
 
@@ -91,6 +126,29 @@ manufactures enforcement facts from topology alone.
 Start the MCP endpoint with `uv run python -m mcp_tool.server`; its command-line equivalent is
 `uv run amr explain <trace-id>`, which formats a readable incident post-mortem rather than dumping
 raw JSON.
+
+## Limitations and roadmap
+
+Honest edges of the current build:
+
+- **Alert delivery in the no-secret demo is substituted.** `make demo` verifies the real
+  loop-watcher signal in ClickHouse, then delivers the Alertmanager-shaped webhook to the
+  controller itself; SigNoz performs that hop only in `make demo-full`, which needs a
+  supported SigNoz credential. The substitution is printed loudly when it happens.
+- **Notification channels are a provider gap.** The official SigNoz Terraform provider
+  manages alert rules and route policies but not notification channels; the webhook channel
+  is a one-time UI step.
+- **Detection is polling, not streaming.** The loop-watcher polls ClickHouse (default every
+  5 s); detection latency is bounded by the poll interval plus ingest lag.
+- **The default LLM is fake.** Deterministic token counts make the demo reproducible; real
+  providers plug in via `AMR_LLM`, but pricing coverage is only as good as
+  `config/pricing.yaml`.
+- **Cycle detection is per-trace.** Cross-conversation loops (an agent ping-ponging across
+  separate traces) are out of scope for now.
+
+Roadmap: SigNoz-native alert delivery in the default path once service-account keys land in
+Community edition, cross-conversation loop detection, per-tenant budgets, and a resume
+policy (auto-resume after N minutes with a tightened budget).
 
 ## Credits
 
