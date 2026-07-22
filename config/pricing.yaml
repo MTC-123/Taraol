@@ -5,3 +5,12 @@ models:
   gpt-4.1-mini:
     input_per_1k: 0.0004
     output_per_1k: 0.0016
+  # source: https://ai.google.dev/gemini-api/docs/pricing (retrieved 2026-07-22)
+  # gemini-2.0-flash: $0.10 input / $0.40 output per 1M tokens.
+  gemini-2.0-flash:
+    input_per_1k: 0.0001
+    output_per_1k: 0.0004
+  # gemini-2.5-flash: $0.30 input / $2.50 output per 1M tokens.
+  gemini-2.5-flash:
+    input_per_1k: 0.0003
+    output_per_1k: 0.0025
