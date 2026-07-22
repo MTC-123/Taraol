@@ -40,6 +40,57 @@ def velocity_query() -> dict[str, Any]:
     }
 
 
+def xconv_velocity_query() -> dict[str, Any]:
+    """A2A edges grouped by conversation so a loop spread across separate traces or
+    conversations can be reconstructed from the union of edges."""
+
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "xconv_velocity",
+            "signal": "traces",
+            "aggregations": [{"expression": "count()", "alias": "hop_count"}],
+            "filter": {
+                "expression": "name = 'a2a.call' AND agentmesh.src EXISTS AND peer.service EXISTS "
+                "AND gen_ai.conversation.id EXISTS"
+            },
+            "groupBy": [
+                _field("gen_ai.conversation.id"),
+                _field("agentmesh.src"),
+                _field("peer.service"),
+            ],
+            "disabled": False,
+        },
+    }
+
+
+def taint_blast_query() -> dict[str, Any]:
+    """Tainted spans grouped by trace, injection origin, and service (blast radius).
+
+    Presence of the ``agentmesh.taint.origin`` string attribute is the taint marker
+    (a boolean lives in a separate column that the ClickHouse fallback does not read).
+    """
+
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "taint_blast",
+            "signal": "traces",
+            "aggregations": [{"expression": "count()", "alias": "tainted_spans"}],
+            "filter": {
+                "expression": "agentmesh.taint.origin EXISTS AND agentmesh.taint.category EXISTS"
+            },
+            "groupBy": [
+                _field("trace_id"),
+                _field("agentmesh.taint.origin"),
+                _field("agentmesh.taint.category"),
+                _field("service.name", "resource"),
+            ],
+            "disabled": False,
+        },
+    }
+
+
 def active_conversations_query() -> dict[str, Any]:
     return {
         "type": "builder_query",
@@ -93,6 +144,8 @@ def trace_query(trace_id: str) -> dict[str, Any]:
                 _field("agentmesh.src"),
                 _field("peer.service"),
                 _field("agentmesh.cost.usd"),
+                _field("agentmesh.output.flagged"),
+                _field("agentmesh.output.category"),
             ],
             "disabled": False,
             "limit": 1000,
@@ -262,6 +315,31 @@ class ClickHouseClient:
                 WHERE {bounded} AND name = 'a2a.call'
                   AND mapContains({attrs}, 'agentmesh.src') AND mapContains({attrs}, 'peer.service')
                 GROUP BY trace_id, `agentmesh.src`, `peer.service`
+            """
+        if name == "xconv_velocity":
+            return f"""
+                SELECT {attrs}['gen_ai.conversation.id'] AS `gen_ai.conversation.id`,
+                       {attrs}['agentmesh.src'] AS `agentmesh.src`,
+                       {attrs}['peer.service'] AS `peer.service`, count() AS hop_count
+                FROM {self._TABLE}
+                WHERE {bounded} AND name = 'a2a.call'
+                  AND mapContains({attrs}, 'agentmesh.src')
+                  AND mapContains({attrs}, 'peer.service')
+                  AND mapContains({attrs}, 'gen_ai.conversation.id')
+                GROUP BY `gen_ai.conversation.id`, `agentmesh.src`, `peer.service`
+            """
+        if name == "taint_blast":
+            return f"""
+                SELECT trace_id,
+                       {attrs}['agentmesh.taint.origin'] AS `agentmesh.taint.origin`,
+                       {attrs}['agentmesh.taint.category'] AS `agentmesh.taint.category`,
+                       resources_string['service.name'] AS `service.name`,
+                       count() AS tainted_spans
+                FROM {self._TABLE}
+                WHERE {bounded} AND mapContains({attrs}, 'agentmesh.taint.origin')
+                  AND mapContains({attrs}, 'agentmesh.taint.category')
+                GROUP BY trace_id, `agentmesh.taint.origin`, `agentmesh.taint.category`,
+                         `service.name`
             """
         if name == "active_conversations":
             return f"""

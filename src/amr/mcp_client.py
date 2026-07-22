@@ -39,6 +39,8 @@ def _trace_query(trace_id: str) -> dict[str, Any]:
                 {"name": "service.name", "fieldContext": "resource"},
                 {"name": "gen_ai.operation.name", "fieldContext": "span"},
                 {"name": "agentmesh.cost.usd", "fieldContext": "span"},
+                {"name": "agentmesh.output.flagged", "fieldContext": "span"},
+                {"name": "agentmesh.output.category", "fieldContext": "span"},
             ],
             "disabled": False,
             "limit": 1000,
@@ -179,6 +181,14 @@ def format_explanation(facts: Mapping[str, Any]) -> str:
     )
     pause = facts.get("pause_action")
     pause_text = "observed" if pause else "not observed"
+    origin = facts.get("bad_output_origin")
+    if isinstance(origin, Mapping):
+        category = origin.get("category") or "unspecified"
+        consumers = ", ".join(origin.get("consumers", [])) or "none"
+        who = origin.get("origin", "unknown")
+        provenance_text = f"{who} ({category}); propagated to: {consumers}"
+    else:
+        provenance_text = "none observed"
     return "\n".join(
         [
             "Agent Mesh Radar — Loop Post-mortem",
@@ -188,6 +198,7 @@ def format_explanation(facts: Mapping[str, Any]) -> str:
             f"Cycle:        {'; '.join(paths) or 'none observed'}",
             f"A2A hops:     {facts.get('hop_count', 0)}",
             f"Direct cost:  USD {float(facts.get('direct_chat_cost_usd', 0.0)):.4f}",
+            f"Bad output:   {provenance_text}",
             f"Pause action: {pause_text}",
             "Next action:  inspect the trace-correlated pause audit event.",
         ]

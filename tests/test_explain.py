@@ -1,3 +1,4 @@
+from amr import semconv
 from amr.explain import explain_trace
 
 
@@ -30,3 +31,28 @@ def test_explain_trace_reports_only_trace_grounded_loop_facts() -> None:
     assert facts["hop_count"] == 3
     assert facts["direct_chat_cost_usd"] == 0.0035
     assert facts["pause_action"] == audit
+    # No output was flagged in this trace.
+    assert facts["bad_output_origin"] is None
+
+
+def test_explain_trace_surfaces_bad_output_origin() -> None:
+    rows = [
+        {"span_id": "1", "parent_span_id": "", "name": "invoke_agent", "serviceName": "planner"},
+        {
+            "span_id": "2",
+            "parent_span_id": "1",
+            "name": "invoke_agent",
+            "serviceName": "writer",
+            "attributes": {
+                semconv.AGENTMESH_OUTPUT_FLAGGED: True,
+                semconv.AGENTMESH_OUTPUT_CATEGORY: "hallucination",
+            },
+        },
+        {"span_id": "3", "parent_span_id": "2", "name": "invoke_agent", "serviceName": "critic"},
+    ]
+    facts = explain_trace("b" * 32, rows)
+    assert facts["bad_output_origin"] == {
+        "origin": "writer",
+        "category": "hallucination",
+        "consumers": ["critic"],
+    }

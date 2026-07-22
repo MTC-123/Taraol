@@ -10,7 +10,15 @@ from .budget import BudgetChecker
 from .config import WatcherConfig
 from .cycle import find_cycles
 from .signals import OTLPSignalEmitter, Signal, SignalEmitter
-from .signoz_client import ClickHouseClient, SigNozClient, TimeRange, velocity_query
+from .signoz_client import (
+    ClickHouseClient,
+    SigNozClient,
+    TimeRange,
+    taint_blast_query,
+    velocity_query,
+    xconv_velocity_query,
+)
+from .xconv_cycle import find_directed_cycles
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +80,11 @@ class LoopWatcher:
         end_ms = _now_ms(self.clock)
         window = TimeRange(end_ms - self.config.loop_window_sec * 1000, end_ms)
         seen_traces: dict[str, list[dict[str, Any]]] = {}
+        # Cross-trace per-edge hop totals feed the circuit breaker: a hot edge (a
+        # runaway or poisoned hop reused across traces) is tripped independent of the
+        # per-trace loop check below.
+        edge_totals: dict[str, int] = {}
+        edge_trace: dict[str, str] = {}
         for row in self.client.run_builder_query(velocity_query(), window):
             trace_id = row.get("trace_id")
             src, target = row.get("agentmesh.src"), row.get("peer.service")
@@ -81,6 +94,9 @@ class LoopWatcher:
                 continue
             if not all(isinstance(value, str) for value in (trace_id, src, target)):
                 continue
+            edge_label = f"{src} -> {target}"
+            edge_totals[edge_label] = edge_totals.get(edge_label, 0) + hops
+            edge_trace[edge_label] = trace_id
             if hops <= self.config.loop_max_repeats:
                 continue
             spans = seen_traces.setdefault(trace_id, self.client.get_trace(trace_id, window))
@@ -105,6 +121,24 @@ class LoopWatcher:
                     ),
                 )
 
+        for edge_label, total in edge_totals.items():
+            if total > self.config.breaker_edge_max:
+                self._emit(
+                    (edge_label, "edge_unhealthy"),
+                    Signal(
+                        "edge_unhealthy",
+                        None,
+                        edge_label,
+                        total,
+                        None,
+                        edge_trace.get(edge_label),
+                        datetime.now(UTC),
+                    ),
+                )
+
+        self._detect_injection(window)
+        self._detect_cross_conversation_loops(window)
+
         lookback = TimeRange(end_ms - self.config.budget_lookback_sec * 1000, end_ms)
         for conversation_id, trace_id in self.budget.active_conversations(window):
             cost = self.budget.conversation_cost(conversation_id, lookback, trace_id)
@@ -121,6 +155,77 @@ class LoopWatcher:
                         datetime.now(UTC),
                     ),
                 )
+
+    def _detect_injection(self, window: TimeRange) -> None:
+        """Emit one injection_detected signal per (trace, origin) with the blast radius."""
+
+        # trace_id -> {(origin, category): set(services)}
+        blasts: dict[str, dict[tuple[str, str], set[str]]] = {}
+        for row in self.client.run_builder_query(taint_blast_query(), window):
+            trace_id = row.get("trace_id")
+            origin = row.get("agentmesh.taint.origin")
+            category = row.get("agentmesh.taint.category")
+            service = row.get("service.name")
+            if not all(isinstance(v, str) and v for v in (trace_id, origin, category, service)):
+                continue
+            blasts.setdefault(trace_id, {}).setdefault((origin, category), set()).add(service)
+
+        for trace_id, groups in blasts.items():
+            for (origin, category), services in groups.items():
+                blast = ",".join(sorted(services))
+                self._emit(
+                    (trace_id, f"injection:{origin}"),
+                    Signal(
+                        "injection_detected",
+                        None,
+                        None,
+                        None,
+                        None,
+                        trace_id,
+                        datetime.now(UTC),
+                        category=category,
+                        origin=origin,
+                        blast=blast,
+                    ),
+                )
+
+    def _detect_cross_conversation_loops(self, window: TimeRange) -> None:
+        """Flag cycles in the union of edges across conversations (invisible per-trace).
+
+        Each conversation contributes at most one occurrence of an edge, so a cycle
+        whose edges each recur across >= xconv_min_repeats conversations is reported.
+        """
+
+        edges: list[tuple[str, str]] = []
+        seen: set[tuple[str, str, str]] = set()
+        edge_trace: dict[tuple[str, str], str] = {}
+        for row in self.client.run_builder_query(xconv_velocity_query(), window):
+            conversation_id = row.get("gen_ai.conversation.id")
+            src, target = row.get("agentmesh.src"), row.get("peer.service")
+            if not all(isinstance(v, str) and v for v in (conversation_id, src, target)):
+                continue
+            key = (conversation_id, src, target)
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append((src, target))
+            edge_trace[(src, target)] = conversation_id
+
+        for cycle in find_directed_cycles(edges, self.config.xconv_min_repeats):
+            src, target = cycle.edges[0]
+            edge_label = f"{src} -> {target}"
+            self._emit(
+                (edge_label, "xconv_loop"),
+                Signal(
+                    "xconv_loop_detected",
+                    None,
+                    edge_label,
+                    cycle.hops,
+                    None,
+                    None,
+                    datetime.now(UTC),
+                ),
+            )
 
     def run_forever(self) -> None:
         while True:

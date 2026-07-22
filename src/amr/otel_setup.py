@@ -1,8 +1,10 @@
 """OpenTelemetry bootstrap shared by independently deployed agents."""
 
 from opentelemetry import _logs, propagate, trace
+from opentelemetry.baggage.propagation import W3CBaggagePropagator
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.propagators.composite import CompositePropagator
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
@@ -29,5 +31,9 @@ def init_tracing(service_name: str) -> trace.Tracer:
     log_provider = LoggerProvider(resource=resource)
     log_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
     _logs.set_logger_provider(log_provider)
-    propagate.set_global_textmap(TraceContextTextMapPropagator())
+    # TraceContext MUST stay first so traceparent is on every hop (non-negotiable);
+    # baggage is added alongside it to carry injection taint across agents.
+    propagate.set_global_textmap(
+        CompositePropagator([TraceContextTextMapPropagator(), W3CBaggagePropagator()])
+    )
     return trace.get_tracer(service_name)

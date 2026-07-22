@@ -23,6 +23,7 @@ class AuditEmitter(Protocol):
         reason: str,
         alert_name: str,
         enforcement_mode: str,
+        edge: str = "",
     ) -> None: ...
 
 
@@ -56,6 +57,7 @@ class OTLPAuditEmitter:
         reason: str,
         alert_name: str,
         enforcement_mode: str,
+        edge: str = "",
     ) -> None:
         attributes = {
             "conversation_id": conversation_id,
@@ -66,6 +68,8 @@ class OTLPAuditEmitter:
             "enforcement_mode": enforcement_mode,
             "ts": datetime.now(UTC).isoformat(),
         }
+        if edge:
+            attributes["edge"] = edge
         signal = Signal(event, conversation_id, None, None, None, trace_id, datetime.now(UTC))
         self._logger.emit(
             _logs.LogRecord(  # type: ignore[attr-defined]

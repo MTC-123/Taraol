@@ -30,6 +30,8 @@ class WatcherConfig:
     signal_cooldown_sec: int
     otlp_endpoint: str
     signoz_clickhouse_url: str | None = None
+    breaker_edge_max: int = 10
+    xconv_min_repeats: int = 1
 
     @classmethod
     def from_env(cls) -> "WatcherConfig":
@@ -48,4 +50,6 @@ class WatcherConfig:
             signal_cooldown_sec=_positive_int("AMR_SIGNAL_COOLDOWN_SEC", 60),
             otlp_endpoint=os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"),
             signoz_clickhouse_url=clickhouse_url,
+            breaker_edge_max=_positive_int("AMR_BREAKER_EDGE_MAX", 10),
+            xconv_min_repeats=_positive_int("AMR_XCONV_MIN_REPEATS", 1),
         )

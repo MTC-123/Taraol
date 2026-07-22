@@ -9,8 +9,12 @@ import httpx
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 
+from amr import semconv
+from amr.breaker import edge_key, get_registry
 from amr.cost import add_to_request_cost
+from amr.genai import current_conversation_id
 from amr.propagation import inject_into
+from amr.taint import mark_taint, taint_from_baggage
 
 
 class _HttpClient(Protocol):
@@ -19,6 +23,10 @@ class _HttpClient(Protocol):
 
 class A2AError(RuntimeError):
     """An invalid or error JSON-RPC response from an A2A peer."""
+
+
+class EdgeBrokenError(A2AError):
+    """The edge circuit breaker is open; the hop was not dispatched."""
 
 
 class A2AClient:
@@ -46,9 +54,28 @@ class A2AClient:
             "agentmesh.src": self.local_service_name,
             "net.peer.name": peer_name,
         }
+        # Stamp the conversation on the edge so cross-conversation loop detection can
+        # group hops by (conversation, src, peer) instead of by a single trace.
+        conversation_id = current_conversation_id()
+        if conversation_id:
+            attributes[semconv.GEN_AI_CONVERSATION_ID] = conversation_id
+        edge = edge_key(self.local_service_name, self.target_service_name)
+        registry = get_registry()
         with self.tracer.start_as_current_span(
             "a2a.call", kind=SpanKind.CLIENT, attributes=attributes
         ) as span:
+            # If the caller is inside a taint scope, mark the edge itself so the
+            # poisoned hop is visible on the Service Map.  Baggage is injected below,
+            # so the callee inherits the taint regardless of this stamp.
+            carried = taint_from_baggage()
+            if carried is not None:
+                mark_taint(span, carried)
+            # Circuit breaker: an open edge short-circuits before any dispatch, so a
+            # runaway or poisoned hop stops flowing until it recovers.
+            if not registry.allow(edge):
+                span.set_attribute(semconv.AGENTMESH_BREAKER_STATE, registry.state_of(edge))
+                span.set_attribute(semconv.AGENTMESH_BREAKER_EDGE, edge)
+                raise EdgeBrokenError(f"edge breaker open: {edge}")
             headers: dict[str, str] = {"content-type": "application/json"}
             inject_into(headers)
             try:
@@ -65,7 +92,9 @@ class A2AClient:
                 )
                 response.raise_for_status()
             except httpx.HTTPError as exc:
+                registry.record_failure(edge)
                 raise A2AError(f"A2A HTTP request failed: {exc}") from exc
+            registry.record_success(edge)
             try:
                 payload = response.json()
             except ValueError as exc:

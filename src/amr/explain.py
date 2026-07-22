@@ -50,6 +50,10 @@ def explain_trace(
 ) -> dict[str, Any]:
     """Return only values directly supported by the supplied SigNoz trace rows."""
 
+    # Imported lazily: provenance reads this module's row helpers, so a top-level
+    # import would be circular.
+    from .provenance import origin_of_bad_output
+
     rows = [dict(span) for span in spans]
     cycles = find_cycles(rows)
     cyclic_agents = sorted(
@@ -82,4 +86,6 @@ def explain_trace(
         "direct_chat_cost_usd": round(chat_cost, 4),
         # A pause is an audit log, not a trace span. Never claim one from trace-only data.
         "pause_action": pauses[-1] if pauses else None,
+        # None when no span carries agentmesh.output.flagged.
+        "bad_output_origin": origin_of_bad_output(rows),
     }

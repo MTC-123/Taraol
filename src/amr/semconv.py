@@ -16,3 +16,19 @@ GEN_AI_CONVERSATION_ID = "gen_ai.conversation.id"
 CHAT = "chat"
 EXECUTE_TOOL = "execute_tool"
 INVOKE_AGENT = "invoke_agent"
+
+# Project-namespaced attributes (never fake gen_ai.* keys).  Taint marks spans in
+# the injection blast radius; values are verdicts/categories only, never content.
+AGENTMESH_TAINT = "agentmesh.taint"
+AGENTMESH_TAINT_CATEGORY = "agentmesh.taint.category"
+AGENTMESH_TAINT_ORIGIN = "agentmesh.taint.origin"
+AGENTMESH_TAINT_HOPS = "agentmesh.taint.hops"
+
+# Circuit-breaker state stamped on a short-circuited a2a.call hop.
+AGENTMESH_BREAKER_STATE = "agentmesh.breaker.state"
+AGENTMESH_BREAKER_EDGE = "agentmesh.breaker.edge"
+
+# Output-quality marker: the producing agent stamps this when its output is judged
+# bad; provenance backtracks the trace to the shallowest flagged span (the origin).
+AGENTMESH_OUTPUT_FLAGGED = "agentmesh.output.flagged"
+AGENTMESH_OUTPUT_CATEGORY = "agentmesh.output.category"
