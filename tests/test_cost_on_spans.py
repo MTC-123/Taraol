@@ -24,9 +24,9 @@ def test_chat_span_sets_cost_and_marks_unknown_models() -> None:
         record_chat_result(span, LLMResult("ok", 1000, 1000, "unknown-model", "stop"))
 
     spans = {finished.name: finished for finished in exporter.get_finished_spans()}
-    assert spans["chat gpt-4.1-mini"].attributes["agentmesh.cost.usd"] == 0.0009
+    assert spans["chat gpt-4.1-mini"].attributes["agentmesh.cost.direct_usd"] == 0.0009
     unknown = spans["chat unknown-model"]
-    assert unknown.attributes["agentmesh.cost.usd"] == 0.0
+    assert unknown.attributes["agentmesh.cost.direct_usd"] == 0.0
     assert unknown.attributes["agentmesh.cost.unpriced"] is True
 
 
@@ -53,8 +53,12 @@ def test_hop_span_equals_callee_subtree_cost() -> None:
         span for span in researcher_exporter.get_finished_spans() if span.name.startswith("chat")
     )
     hop = next(span for span in planner_exporter.get_finished_spans() if span.name == "a2a.call")
-    assert chat.attributes["agentmesh.cost.usd"] == 0.0012
-    assert hop.attributes["agentmesh.cost.usd"] == chat.attributes["agentmesh.cost.usd"]
+    assert chat.attributes["agentmesh.cost.direct_usd"] == 0.0012
+    # The hop carries the callee subtree as downstream cost, distinct from direct cost.
+    assert (
+        hop.attributes["agentmesh.cost.downstream_usd"]
+        == chat.attributes["agentmesh.cost.direct_usd"]
+    )
     assert hop.attributes["agentmesh.src"] == "planner"
     assert hop.attributes["peer.service"] == "researcher"
 
@@ -93,4 +97,4 @@ def test_hop_span_includes_a_downstream_callee_subtree_once() -> None:
     planner_hop = next(
         span for span in planner_exporter.get_finished_spans() if span.name == "a2a.call"
     )
-    assert planner_hop.attributes["agentmesh.cost.usd"] == 0.0024
+    assert planner_hop.attributes["agentmesh.cost.downstream_usd"] == 0.0024

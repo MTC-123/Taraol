@@ -80,7 +80,9 @@ def explain_trace(
         if span.get("name") == "a2a.call":
             hop_count += 1
         if _value(span, "gen_ai.operation.name") == "chat":
-            cost = _value(span, "agentmesh.cost.usd")
+            # Sum direct chat cost only — the additive conversation total. Hop spans
+            # carry downstream_usd (subtree) which would double count.
+            cost = _value(span, "agentmesh.cost.direct_usd")
             if isinstance(cost, (int, float)) and not isinstance(cost, bool):
                 chat_cost += float(cost)
     pauses = [

@@ -99,7 +99,7 @@ def active_conversations_query() -> dict[str, Any]:
             "signal": "traces",
             "filter": {
                 "expression": "gen_ai.operation.name = 'chat' AND gen_ai.conversation.id EXISTS "
-                "AND agentmesh.cost.usd EXISTS"
+                "AND agentmesh.cost.direct_usd EXISTS"
             },
             "selectFields": [_field("gen_ai.conversation.id"), _field("trace_id")],
             "disabled": False,
@@ -115,9 +115,9 @@ def conversation_cost_query(conversation_id: str) -> dict[str, Any]:
         "spec": {
             "name": "conversation_cost",
             "signal": "traces",
-            "aggregations": [{"expression": "sum(agentmesh.cost.usd)", "alias": "cost_usd"}],
+            "aggregations": [{"expression": "sum(agentmesh.cost.direct_usd)", "alias": "cost_usd"}],
             "filter": {
-                "expression": "gen_ai.operation.name = 'chat' AND agentmesh.cost.usd EXISTS "
+                "expression": "gen_ai.operation.name = 'chat' AND agentmesh.cost.direct_usd EXISTS "
                 f"AND gen_ai.conversation.id = '{escaped}'"
             },
             "disabled": False,
@@ -143,7 +143,8 @@ def trace_query(trace_id: str) -> dict[str, Any]:
                 _field("gen_ai.conversation.id"),
                 _field("agentmesh.src"),
                 _field("peer.service"),
-                _field("agentmesh.cost.usd"),
+                _field("agentmesh.cost.direct_usd"),
+                _field("agentmesh.cost.downstream_usd"),
                 _field("agentmesh.output.flagged"),
                 _field("agentmesh.output.category"),
                 _field("agentmesh.state.hash"),
@@ -348,7 +349,7 @@ class ClickHouseClient:
                 FROM {self._TABLE}
                 WHERE {bounded} AND {attrs}['gen_ai.operation.name'] = 'chat'
                   AND mapContains({attrs}, 'gen_ai.conversation.id')
-                  AND mapContains(attributes_number, 'agentmesh.cost.usd')
+                  AND mapContains(attributes_number, 'agentmesh.cost.direct_usd')
                 GROUP BY `gen_ai.conversation.id`, trace_id
             """
         if name == "conversation_cost":
@@ -360,7 +361,7 @@ class ClickHouseClient:
             conversation_id = expression["expression"].rsplit("'", 2)[-2].replace("\\'", "'")
             escaped = conversation_id.replace("'", "\\'")
             return f"""
-                SELECT sum(attributes_number['agentmesh.cost.usd']) AS cost_usd
+                SELECT sum(attributes_number['agentmesh.cost.direct_usd']) AS cost_usd
                 FROM {self._TABLE}
                 WHERE {bounded} AND {attrs}['gen_ai.operation.name'] = 'chat'
                   AND {attrs}['gen_ai.conversation.id'] = '{escaped}'

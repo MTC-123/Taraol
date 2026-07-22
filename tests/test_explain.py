@@ -11,7 +11,7 @@ def test_explain_trace_reports_only_trace_grounded_loop_facts() -> None:
             "parent_span_id": "2",
             "name": "chat",
             "serviceName": "writer",
-            "attributes": {"gen_ai.operation.name": "chat", "agentmesh.cost.usd": 0.0012},
+            "attributes": {"gen_ai.operation.name": "chat", "agentmesh.cost.direct_usd": 0.0012},
         },
         {"span_id": "4", "parent_span_id": "3", "name": "a2a.call", "serviceName": "writer"},
         {
@@ -19,7 +19,7 @@ def test_explain_trace_reports_only_trace_grounded_loop_facts() -> None:
             "parent_span_id": "4",
             "name": "chat",
             "serviceName": "critic",
-            "attributes": {"gen_ai.operation.name": "chat", "agentmesh.cost.usd": 0.0023},
+            "attributes": {"gen_ai.operation.name": "chat", "agentmesh.cost.direct_usd": 0.0023},
         },
         {"span_id": "6", "parent_span_id": "5", "name": "a2a.call", "serviceName": "critic"},
         {"span_id": "7", "parent_span_id": "6", "name": "a2a.handle", "serviceName": "writer"},
