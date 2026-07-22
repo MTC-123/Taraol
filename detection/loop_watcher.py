@@ -78,6 +78,11 @@ class LoopWatcher:
         end_ms = _now_ms(self.clock)
         window = TimeRange(end_ms - self.config.loop_window_sec * 1000, end_ms)
         seen_traces: dict[str, list[dict[str, Any]]] = {}
+        # Cross-trace per-edge hop totals feed the circuit breaker: a hot edge (a
+        # runaway or poisoned hop reused across traces) is tripped independent of the
+        # per-trace loop check below.
+        edge_totals: dict[str, int] = {}
+        edge_trace: dict[str, str] = {}
         for row in self.client.run_builder_query(velocity_query(), window):
             trace_id = row.get("trace_id")
             src, target = row.get("agentmesh.src"), row.get("peer.service")
@@ -87,6 +92,9 @@ class LoopWatcher:
                 continue
             if not all(isinstance(value, str) for value in (trace_id, src, target)):
                 continue
+            edge_label = f"{src} -> {target}"
+            edge_totals[edge_label] = edge_totals.get(edge_label, 0) + hops
+            edge_trace[edge_label] = trace_id
             if hops <= self.config.loop_max_repeats:
                 continue
             spans = seen_traces.setdefault(trace_id, self.client.get_trace(trace_id, window))
@@ -107,6 +115,21 @@ class LoopWatcher:
                         hops,
                         None,
                         trace_id,
+                        datetime.now(UTC),
+                    ),
+                )
+
+        for edge_label, total in edge_totals.items():
+            if total > self.config.breaker_edge_max:
+                self._emit(
+                    (edge_label, "edge_unhealthy"),
+                    Signal(
+                        "edge_unhealthy",
+                        None,
+                        edge_label,
+                        total,
+                        None,
+                        edge_trace.get(edge_label),
                         datetime.now(UTC),
                     ),
                 )

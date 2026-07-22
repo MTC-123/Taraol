@@ -10,6 +10,7 @@ class _Control:
     def __init__(self) -> None:
         self.pauses: list[tuple[str, str, str, str]] = []
         self.resumes: list[tuple[str, str, str, str]] = []
+        self.breaks: list[tuple[str, str, str, str]] = []
 
     def pause(
         self, agent: str, conversation_id: str, *, reason: str, trace_id: str
@@ -22,6 +23,10 @@ class _Control:
     ) -> dict[str, str]:
         self.resumes.append((agent, conversation_id, reason, trace_id))
         return {"status": "resumed"}
+
+    def break_edge(self, agent: str, edge: str, *, reason: str, trace_id: str) -> dict[str, str]:
+        self.breaks.append((agent, edge, reason, trace_id))
+        return {"status": "open"}
 
 
 def _alert(name: str, **labels: str) -> dict[str, object]:
@@ -46,6 +51,19 @@ def test_loop_alert_pauses_callee_once_and_emits_audit() -> None:
             "enforcement_mode": "auto",
         }
     ]
+
+
+def test_edge_breaker_alert_trips_source_agent_once_and_audits() -> None:
+    control, audit = _Control(), RecordingAuditEmitter()
+    controller = Controller(control, audit)
+    payload = {"alerts": [_alert("edge-breaker", edge="writer -> critic")]}
+    assert controller.receive(payload) == {"accepted": 1, "ignored": 0, "pending": []}
+    assert controller.receive(payload) == {"accepted": 0, "ignored": 1, "pending": []}
+    # Breaker tripped on the SOURCE agent; no pause issued; no conversation id needed.
+    assert control.breaks == [("writer", "writer -> critic", "edge-breaker", TRACE_ID)]
+    assert control.pauses == []
+    assert audit.events[-1]["event"] == "edge_broken"
+    assert audit.events[-1]["edge"] == "writer -> critic"
 
 
 def test_budget_multi_alert_malformed_and_resume_are_safe() -> None:

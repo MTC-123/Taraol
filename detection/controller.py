@@ -28,6 +28,10 @@ class _Control(Protocol):
         self, agent: str, conversation_id: str, *, reason: str, trace_id: str
     ) -> dict[str, Any]: ...
 
+    def break_edge(
+        self, agent: str, edge: str, *, reason: str, trace_id: str
+    ) -> dict[str, Any]: ...
+
 
 @dataclass(frozen=True, slots=True)
 class Decision:
@@ -36,6 +40,7 @@ class Decision:
     trace_id: str
     reason: str
     alert_name: str
+    edge: str = ""
 
 
 class Controller:
@@ -66,16 +71,31 @@ class Controller:
         return ""
 
     def _decision(self, alert: Mapping[str, Any]) -> Decision | None:
-        conversation_id = self._value(alert, "conversation_id")
-        trace_id = self._value(alert, "trace_id")
         alert_name = self._value(alert, "alertname")
+        edge = self._value(alert, "edge")
+        trace_id = self._value(alert, "trace_id")
+        # Edge-breaker is per-edge and process-global; it needs the edge and its source
+        # agent, but not a conversation id.
+        if alert_name == "edge-breaker":
+            parts = edge.split("->", maxsplit=1)
+            if len(parts) != 2 or not parts[0].strip():
+                return None
+            source = parts[0].strip()
+            return Decision(
+                self._value(alert, "conversation_id"),
+                source,
+                trace_id,
+                alert_name,
+                alert_name,
+                edge=f"{parts[0].strip()} -> {parts[1].strip()}",
+            )
+        conversation_id = self._value(alert, "conversation_id")
         if (
             not conversation_id
             or not trace_id
             or alert_name not in {"loop-detected", "budget-exceeded"}
         ):
             return None
-        edge = self._value(alert, "edge")
         if alert_name == "loop-detected":
             parts = edge.split("->", maxsplit=1)
             if len(parts) != 2 or not parts[1].strip():
@@ -86,7 +106,15 @@ class Controller:
         return Decision(conversation_id, agent, trace_id, alert_name, alert_name)
 
     def _duplicate(self, decision: Decision) -> bool:
-        key = (decision.conversation_id, decision.agent)
+        # Edge breakers dedupe per edge; pause actions dedupe per conversation+agent.
+        key = (
+            (decision.edge, decision.agent)
+            if decision.edge
+            else (
+                decision.conversation_id,
+                decision.agent,
+            )
+        )
         with self._lock:
             previous = self._recent.get(key)
             if previous is not None and self.clock() - previous < self.cooldown_sec:
@@ -95,6 +123,24 @@ class Controller:
             return False
 
     def _enforce(self, decision: Decision, mode: str) -> None:
+        if decision.edge:
+            self.control.break_edge(
+                decision.agent,
+                decision.edge,
+                reason=decision.reason,
+                trace_id=decision.trace_id,
+            )
+            self.audit.emit(
+                "edge_broken",
+                conversation_id=decision.conversation_id,
+                agent=decision.agent,
+                trace_id=decision.trace_id,
+                reason=decision.reason,
+                alert_name=decision.alert_name,
+                enforcement_mode=mode,
+                edge=decision.edge,
+            )
+            return
         self.control.pause(
             decision.agent,
             decision.conversation_id,

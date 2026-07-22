@@ -9,7 +9,7 @@ from fastapi import Request
 from opentelemetry import trace
 from opentelemetry.trace import Tracer
 
-from amr.a2a import A2AClient, A2AError, A2AServer
+from amr.a2a import A2AClient, A2AError, A2AServer, EdgeBrokenError
 from amr.events import reasoning_event
 from amr.genai import agent_span, chat_span, record_chat_result, tool_span
 from amr.guardrail import INPUT, OUTPUT, scan
@@ -98,6 +98,11 @@ def register_agent(server: A2AServer, name: str, tracer: Tracer) -> None:
                                 _target_url(target),
                             )
                             targets.append(target)
+                        except EdgeBrokenError:
+                            # Expected self-healing: the breaker stopped this hop.
+                            reasoning_event(
+                                name, conversation_id, "edge_broken", hop=hops, target=target
+                            )
                         except A2AError:
                             logger.exception("%s could not call %s", name, target)
                 return targets

@@ -82,6 +82,7 @@ class OTLPSignalEmitter:
         self._loops = meter.create_counter("agentmesh.loops.detected")
         self._budgets = meter.create_counter("agentmesh.budget.breaches")
         self._injections = meter.create_counter("agentmesh.injection.detected")
+        self._unhealthy_edges = meter.create_counter("agentmesh.edges.unhealthy")
 
     @staticmethod
     def _context(signal: Signal):
@@ -113,6 +114,8 @@ class OTLPSignalEmitter:
             self._budgets.add(1)
         elif signal.signal == "injection_detected":
             self._injections.add(1)
+        elif signal.signal == "edge_unhealthy":
+            self._unhealthy_edges.add(1)
 
     def shutdown(self) -> None:
         self.logger_provider.shutdown()

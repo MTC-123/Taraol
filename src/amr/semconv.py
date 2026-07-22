@@ -23,3 +23,7 @@ AGENTMESH_TAINT = "agentmesh.taint"
 AGENTMESH_TAINT_CATEGORY = "agentmesh.taint.category"
 AGENTMESH_TAINT_ORIGIN = "agentmesh.taint.origin"
 AGENTMESH_TAINT_HOPS = "agentmesh.taint.hops"
+
+# Circuit-breaker state stamped on a short-circuited a2a.call hop.
+AGENTMESH_BREAKER_STATE = "agentmesh.breaker.state"
+AGENTMESH_BREAKER_EDGE = "agentmesh.breaker.edge"

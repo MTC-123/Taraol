@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
+from amr.breaker import get_registry
 from amr.cost import request_cost_scope
 from amr.propagation import extract_from
 
@@ -32,6 +33,8 @@ class A2AServer:
         self.app.post("/a2a")(self._handle)
         self.app.post("/control/pause")(self._pause)
         self.app.post("/control/resume")(self._resume)
+        self.app.post("/control/break_edge")(self._break_edge)
+        self.app.post("/control/reset_edge")(self._reset_edge)
 
     def register(self, method: str, handler: Handler) -> None:
         self.handlers[method] = handler
@@ -72,6 +75,29 @@ class A2AServer:
         with self._pause_lock:
             was_paused = self._paused.pop(conversation_id, None) is not None
         return {"status": "resumed", "conversation_id": conversation_id, "was_paused": was_paused}
+
+    @staticmethod
+    async def _edge_from(request: Request) -> str | None:
+        try:
+            body = await request.json()
+        except ValueError:
+            return None
+        edge = body.get("edge") if isinstance(body, dict) else None
+        return edge if isinstance(edge, str) and edge else None
+
+    async def _break_edge(self, request: Request) -> dict[str, Any]:
+        edge = await self._edge_from(request)
+        if edge is None:
+            return {"status": "invalid", "detail": "edge is required"}
+        get_registry().trip(edge)
+        return {"status": "open", "edge": edge}
+
+    async def _reset_edge(self, request: Request) -> dict[str, Any]:
+        edge = await self._edge_from(request)
+        if edge is None:
+            return {"status": "invalid", "detail": "edge is required"}
+        get_registry().reset(edge)
+        return {"status": "closed", "edge": edge}
 
     async def _handle(self, request: Request) -> dict[str, Any]:
         try:
