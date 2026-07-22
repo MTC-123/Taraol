@@ -12,6 +12,7 @@ from opentelemetry.trace import SpanKind
 from amr import semconv
 from amr.breaker import edge_key, get_registry
 from amr.cost import add_to_request_cost
+from amr.genai import current_conversation_id
 from amr.propagation import inject_into
 from amr.taint import mark_taint, taint_from_baggage
 
@@ -53,6 +54,11 @@ class A2AClient:
             "agentmesh.src": self.local_service_name,
             "net.peer.name": peer_name,
         }
+        # Stamp the conversation on the edge so cross-conversation loop detection can
+        # group hops by (conversation, src, peer) instead of by a single trace.
+        conversation_id = current_conversation_id()
+        if conversation_id:
+            attributes[semconv.GEN_AI_CONVERSATION_ID] = conversation_id
         edge = edge_key(self.local_service_name, self.target_service_name)
         registry = get_registry()
         with self.tracer.start_as_current_span(

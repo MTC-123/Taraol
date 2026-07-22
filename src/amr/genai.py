@@ -14,6 +14,12 @@ from .llm import LLMResult
 _conversation_id: ContextVar[str | None] = ContextVar("amr_conversation_id", default=None)
 
 
+def current_conversation_id() -> str | None:
+    """Return the conversation id of the enclosing agent span, if any."""
+
+    return _conversation_id.get()
+
+
 def _provider_name() -> str:
     return os.environ.get("AMR_LLM_PROVIDER", os.environ.get("AMR_LLM", "fake"))
 

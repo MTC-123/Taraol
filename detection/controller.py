@@ -74,9 +74,10 @@ class Controller:
         alert_name = self._value(alert, "alertname")
         edge = self._value(alert, "edge")
         trace_id = self._value(alert, "trace_id")
-        # Edge-breaker is per-edge and process-global; it needs the edge and its source
-        # agent, but not a conversation id.
-        if alert_name == "edge-breaker":
+        # Edge-breaker and cross-conversation loops are per-edge and process-global;
+        # they need the edge and its source agent, but not a conversation id.  Both
+        # trip the breaker on the offending edge.
+        if alert_name in {"edge-breaker", "xconv-loop-detected"}:
             parts = edge.split("->", maxsplit=1)
             if len(parts) != 2 or not parts[0].strip():
                 return None

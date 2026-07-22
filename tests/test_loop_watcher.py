@@ -13,10 +13,18 @@ def _config() -> WatcherConfig:
 
 
 class FakeClient:
-    def __init__(self, *, looping: bool = True, cost: float = 0.02, tainted: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        looping: bool = True,
+        cost: float = 0.02,
+        tainted: bool = False,
+        xconv_split: bool = False,
+    ) -> None:
         self.looping = looping
         self.cost = cost
         self.tainted = tainted
+        self.xconv_split = xconv_split
 
     def run_builder_query(self, query: dict[str, Any], _: TimeRange) -> list[dict[str, Any]]:
         name = query["spec"]["name"]
@@ -28,6 +36,25 @@ class FakeClient:
                     "peer.service": "writer",
                     "hop_count": 4,
                 }
+            ]
+        if name == "xconv_velocity":
+            if not self.xconv_split:
+                return []
+            # A benign-per-conversation split loop: writer->critic in one, critic->writer
+            # in another. No single trace is cyclic; their union is.
+            return [
+                {
+                    "gen_ai.conversation.id": "cA",
+                    "agentmesh.src": "writer",
+                    "peer.service": "critic",
+                    "hop_count": 1,
+                },
+                {
+                    "gen_ai.conversation.id": "cB",
+                    "agentmesh.src": "critic",
+                    "peer.service": "writer",
+                    "hop_count": 1,
+                },
             ]
         if name == "taint_blast":
             if not self.tainted:
@@ -81,6 +108,24 @@ def test_watcher_does_not_emit_loop_for_acyclic_trace() -> None:
     )
     watcher.poll_once()
     assert emitter.signals == []
+
+
+def test_watcher_emits_cross_conversation_loop_not_visible_per_trace() -> None:
+    now = [100.0]
+    emitter = RecordingEmitter()
+    watcher = LoopWatcher(
+        FakeClient(looping=False, cost=0.001, xconv_split=True),
+        _config(),
+        emitter,
+        clock=lambda: now[0],
+    )
+    watcher.poll_once()
+    watcher.poll_once()  # deduped within cooldown
+    xconv = [s for s in emitter.signals if s.signal == "xconv_loop_detected"]
+    assert len(xconv) == 1
+    assert xconv[0].edge in {"critic -> writer", "writer -> critic"}
+    # No per-trace loop fired: each conversation alone is acyclic.
+    assert not any(s.signal == "loop_detected" for s in emitter.signals)
 
 
 def test_watcher_emits_injection_with_blast_radius_once() -> None:

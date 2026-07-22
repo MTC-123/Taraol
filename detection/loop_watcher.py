@@ -16,7 +16,9 @@ from .signoz_client import (
     TimeRange,
     taint_blast_query,
     velocity_query,
+    xconv_velocity_query,
 )
+from .xconv_cycle import find_directed_cycles
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +137,7 @@ class LoopWatcher:
                 )
 
         self._detect_injection(window)
+        self._detect_cross_conversation_loops(window)
 
         lookback = TimeRange(end_ms - self.config.budget_lookback_sec * 1000, end_ms)
         for conversation_id, trace_id in self.budget.active_conversations(window):
@@ -185,6 +188,44 @@ class LoopWatcher:
                         blast=blast,
                     ),
                 )
+
+    def _detect_cross_conversation_loops(self, window: TimeRange) -> None:
+        """Flag cycles in the union of edges across conversations (invisible per-trace).
+
+        Each conversation contributes at most one occurrence of an edge, so a cycle
+        whose edges each recur across >= xconv_min_repeats conversations is reported.
+        """
+
+        edges: list[tuple[str, str]] = []
+        seen: set[tuple[str, str, str]] = set()
+        edge_trace: dict[tuple[str, str], str] = {}
+        for row in self.client.run_builder_query(xconv_velocity_query(), window):
+            conversation_id = row.get("gen_ai.conversation.id")
+            src, target = row.get("agentmesh.src"), row.get("peer.service")
+            if not all(isinstance(v, str) and v for v in (conversation_id, src, target)):
+                continue
+            key = (conversation_id, src, target)
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append((src, target))
+            edge_trace[(src, target)] = conversation_id
+
+        for cycle in find_directed_cycles(edges, self.config.xconv_min_repeats):
+            src, target = cycle.edges[0]
+            edge_label = f"{src} -> {target}"
+            self._emit(
+                (edge_label, "xconv_loop"),
+                Signal(
+                    "xconv_loop_detected",
+                    None,
+                    edge_label,
+                    cycle.hops,
+                    None,
+                    None,
+                    datetime.now(UTC),
+                ),
+            )
 
     def run_forever(self) -> None:
         while True:

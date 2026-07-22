@@ -66,6 +66,16 @@ def test_edge_breaker_alert_trips_source_agent_once_and_audits() -> None:
     assert audit.events[-1]["edge"] == "writer -> critic"
 
 
+def test_xconv_loop_alert_trips_edge_breaker() -> None:
+    control, audit = _Control(), RecordingAuditEmitter()
+    controller = Controller(control, audit)
+    payload = {"alerts": [_alert("xconv-loop-detected", edge="critic -> writer")]}
+    assert controller.receive(payload) == {"accepted": 1, "ignored": 0, "pending": []}
+    assert control.breaks == [("critic", "critic -> writer", "xconv-loop-detected", TRACE_ID)]
+    assert control.pauses == []
+    assert audit.events[-1]["event"] == "edge_broken"
+
+
 def test_budget_multi_alert_malformed_and_resume_are_safe() -> None:
     control, audit = _Control(), RecordingAuditEmitter()
     controller = Controller(control, audit)

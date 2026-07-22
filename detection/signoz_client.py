@@ -40,6 +40,30 @@ def velocity_query() -> dict[str, Any]:
     }
 
 
+def xconv_velocity_query() -> dict[str, Any]:
+    """A2A edges grouped by conversation so a loop spread across separate traces or
+    conversations can be reconstructed from the union of edges."""
+
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "xconv_velocity",
+            "signal": "traces",
+            "aggregations": [{"expression": "count()", "alias": "hop_count"}],
+            "filter": {
+                "expression": "name = 'a2a.call' AND agentmesh.src EXISTS AND peer.service EXISTS "
+                "AND gen_ai.conversation.id EXISTS"
+            },
+            "groupBy": [
+                _field("gen_ai.conversation.id"),
+                _field("agentmesh.src"),
+                _field("peer.service"),
+            ],
+            "disabled": False,
+        },
+    }
+
+
 def taint_blast_query() -> dict[str, Any]:
     """Tainted spans grouped by trace, injection origin, and service (blast radius).
 
@@ -289,6 +313,18 @@ class ClickHouseClient:
                 WHERE {bounded} AND name = 'a2a.call'
                   AND mapContains({attrs}, 'agentmesh.src') AND mapContains({attrs}, 'peer.service')
                 GROUP BY trace_id, `agentmesh.src`, `peer.service`
+            """
+        if name == "xconv_velocity":
+            return f"""
+                SELECT {attrs}['gen_ai.conversation.id'] AS `gen_ai.conversation.id`,
+                       {attrs}['agentmesh.src'] AS `agentmesh.src`,
+                       {attrs}['peer.service'] AS `peer.service`, count() AS hop_count
+                FROM {self._TABLE}
+                WHERE {bounded} AND name = 'a2a.call'
+                  AND mapContains({attrs}, 'agentmesh.src')
+                  AND mapContains({attrs}, 'peer.service')
+                  AND mapContains({attrs}, 'gen_ai.conversation.id')
+                GROUP BY `gen_ai.conversation.id`, `agentmesh.src`, `peer.service`
             """
         if name == "taint_blast":
             return f"""

@@ -5,6 +5,7 @@ locals {
   loop_condition = jsonencode(jsondecode(file("${path.module}/../alerts/loop-detected.json")).condition)
   budget_condition = jsonencode(jsondecode(file("${path.module}/../alerts/budget-exceeded.json")).condition)
   edge_breaker_condition = jsonencode(jsondecode(file("${path.module}/../alerts/edge-breaker.json")).condition)
+  xconv_loop_condition = jsonencode(jsondecode(file("${path.module}/../alerts/xconv-loop-detected.json")).condition)
   fast_evaluation = jsonencode({
     kind = "rolling"
     spec = { evalWindow = "30s", frequency = "10s", matchType = "at_least_once" }
@@ -54,6 +55,24 @@ resource "signoz_alert" "edge_breaker" {
   summary               = "Agent mesh edge unhealthy: $edge"
   preferred_channels    = ["agentmesh-controller"]
   notification_settings = { group_by = ["edge", "trace_id"], use_policy = true }
+  labels                = { "amr.enforcement" = "controller" }
+}
+
+resource "signoz_alert" "xconv_loop_detected" {
+  alert                 = "xconv-loop-detected"
+  alert_type            = "LOGS_BASED_ALERT"
+  severity              = "critical"
+  rule_type             = "threshold_rule"
+  version               = "v5"
+  schema_version        = "v2alpha1"
+  eval_window           = "30s"
+  frequency             = "10s"
+  condition             = local.xconv_loop_condition
+  evaluation            = local.fast_evaluation
+  description           = "Trip breaker on cross-conversation loop edge=$edge"
+  summary               = "Agent mesh cross-conversation loop: $edge"
+  preferred_channels    = ["agentmesh-controller"]
+  notification_settings = { group_by = ["edge"], use_policy = true }
   labels                = { "amr.enforcement" = "controller" }
 }
 
