@@ -43,7 +43,8 @@ flowchart LR
    the single host entry point (`:8000`); all later hops stay on the private network.
 2. **SigNoz** derives the Service Map, RED metrics (`signoz_calls_total`,
    `signoz_latency_bucket`), and trace/log views from those traces — no custom UI.
-   Cost rides on span attributes (`agentmesh.cost.usd`).
+   Cost rides on span attributes, split into `agentmesh.cost.direct_usd` (per chat call)
+   and `agentmesh.cost.downstream_usd` (callee subtree, per delegation hop).
 3. **loop-watcher** polls ClickHouse for repeated-edge cycles and conversation budget
    breaches, emitting `loop_detected` and budget signals as trace-correlated OTLP logs.
 4. **Alerting**: Terraform-provisioned SigNoz alert rules and a route policy deliver a
