@@ -1,9 +1,9 @@
 from typing import Any
 
 from detection.config import WatcherConfig
-from detection.loop_watcher import LoopWatcher
+from detection.loop_watcher import LoopWatcher, make_client
 from detection.signals import RecordingEmitter
-from detection.signoz_client import TimeRange
+from detection.signoz_client import ClickHouseClient, SigNozClient, TimeRange
 
 TRACE_ID = "a" * 32
 
@@ -114,6 +114,43 @@ def test_watcher_emits_confirmed_loop_and_budget_once_then_deduplicates() -> Non
     now[0] += 61
     watcher.poll_once()
     assert [signal.signal for signal in emitter.signals].count("loop_detected") == 2
+
+
+def test_signoz_query_api_is_the_default_detection_backend() -> None:
+    # API key present -> SigNoz Query API, even if a ClickHouse URL is also set.
+    with_key = WatcherConfig(
+        "http://signoz",
+        "key",
+        30,
+        3,
+        0.01,
+        5,
+        3600,
+        60,
+        "http://ingester:4317",
+        signoz_clickhouse_url="http://clickhouse:8123",
+    )
+    client = make_client(with_key)
+    assert isinstance(client, SigNozClient)
+    client.close()
+
+
+def test_clickhouse_is_only_a_no_secret_fallback() -> None:
+    no_key = WatcherConfig(
+        "http://signoz",
+        "",
+        30,
+        3,
+        0.01,
+        5,
+        3600,
+        60,
+        "http://ingester:4317",
+        signoz_clickhouse_url="http://clickhouse:8123",
+    )
+    client = make_client(no_key)
+    assert isinstance(client, ClickHouseClient)
+    client.close()
 
 
 def test_runaway_loop_signal_carries_repeated_state_reason() -> None:

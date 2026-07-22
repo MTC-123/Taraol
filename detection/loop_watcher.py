@@ -284,13 +284,30 @@ class LoopWatcher:
             self.sleeper(self.config.poll_interval_sec)
 
 
+def make_client(config: WatcherConfig) -> _Client:
+    """Select the detection backend.
+
+    SigNoz's v5 Query API is the primary path: the watcher uses SigNoz itself
+    (its query engine, the same one behind dashboards and alerts), not its storage.
+    Direct ClickHouse access is an explicit, no-secret fallback for local demos and
+    is only chosen when no SigNoz API key is configured.
+    """
+
+    if config.signoz_api_key:
+        logger.info("detection backend: SigNoz Query API (%s)", config.signoz_url)
+        return SigNozClient(config.signoz_url, config.signoz_api_key)
+    if config.signoz_clickhouse_url:
+        logger.warning(
+            "detection backend: direct ClickHouse fallback (no SIGNOZ_API_KEY set); "
+            "set SIGNOZ_API_KEY to use the SigNoz Query API"
+        )
+        return ClickHouseClient(config.signoz_clickhouse_url)
+    raise ValueError("set SIGNOZ_API_KEY (preferred) or SIGNOZ_CLICKHOUSE_URL (fallback)")
+
+
 def main() -> None:
     config = WatcherConfig.from_env()
-    client = (
-        ClickHouseClient(config.signoz_clickhouse_url)
-        if config.signoz_clickhouse_url
-        else SigNozClient(config.signoz_url, config.signoz_api_key)
-    )
+    client = make_client(config)
     emitter = OTLPSignalEmitter(config.otlp_endpoint)
     try:
         LoopWatcher(client, config, emitter).run_forever()
