@@ -26,6 +26,11 @@ class Signal:
     trace_id: str | None
     ts: datetime
     origin_span_id: str | None = None
+    # Injection-taint context (content-free): the flagged category, the originating
+    # service, and the comma-joined blast-radius services reached by the taint.
+    category: str | None = None
+    origin: str | None = None
+    blast: str | None = None
 
     def attributes(self) -> dict[str, str | int | float]:
         return {
@@ -76,6 +81,7 @@ class OTLPSignalEmitter:
         meter = self.meter_provider.get_meter("agentmesh.detection")
         self._loops = meter.create_counter("agentmesh.loops.detected")
         self._budgets = meter.create_counter("agentmesh.budget.breaches")
+        self._injections = meter.create_counter("agentmesh.injection.detected")
 
     @staticmethod
     def _context(signal: Signal):
@@ -105,6 +111,8 @@ class OTLPSignalEmitter:
             self._loops.add(1)
         elif signal.signal == "budget_exceeded":
             self._budgets.add(1)
+        elif signal.signal == "injection_detected":
+            self._injections.add(1)
 
     def shutdown(self) -> None:
         self.logger_provider.shutdown()

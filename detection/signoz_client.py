@@ -40,6 +40,33 @@ def velocity_query() -> dict[str, Any]:
     }
 
 
+def taint_blast_query() -> dict[str, Any]:
+    """Tainted spans grouped by trace, injection origin, and service (blast radius).
+
+    Presence of the ``agentmesh.taint.origin`` string attribute is the taint marker
+    (a boolean lives in a separate column that the ClickHouse fallback does not read).
+    """
+
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "taint_blast",
+            "signal": "traces",
+            "aggregations": [{"expression": "count()", "alias": "tainted_spans"}],
+            "filter": {
+                "expression": "agentmesh.taint.origin EXISTS AND agentmesh.taint.category EXISTS"
+            },
+            "groupBy": [
+                _field("trace_id"),
+                _field("agentmesh.taint.origin"),
+                _field("agentmesh.taint.category"),
+                _field("service.name", "resource"),
+            ],
+            "disabled": False,
+        },
+    }
+
+
 def active_conversations_query() -> dict[str, Any]:
     return {
         "type": "builder_query",
@@ -262,6 +289,19 @@ class ClickHouseClient:
                 WHERE {bounded} AND name = 'a2a.call'
                   AND mapContains({attrs}, 'agentmesh.src') AND mapContains({attrs}, 'peer.service')
                 GROUP BY trace_id, `agentmesh.src`, `peer.service`
+            """
+        if name == "taint_blast":
+            return f"""
+                SELECT trace_id,
+                       {attrs}['agentmesh.taint.origin'] AS `agentmesh.taint.origin`,
+                       {attrs}['agentmesh.taint.category'] AS `agentmesh.taint.category`,
+                       resources_string['service.name'] AS `service.name`,
+                       count() AS tainted_spans
+                FROM {self._TABLE}
+                WHERE {bounded} AND mapContains({attrs}, 'agentmesh.taint.origin')
+                  AND mapContains({attrs}, 'agentmesh.taint.category')
+                GROUP BY trace_id, `agentmesh.taint.origin`, `agentmesh.taint.category`,
+                         `service.name`
             """
         if name == "active_conversations":
             return f"""

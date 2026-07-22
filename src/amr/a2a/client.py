@@ -11,6 +11,7 @@ from opentelemetry.trace import SpanKind
 
 from amr.cost import add_to_request_cost
 from amr.propagation import inject_into
+from amr.taint import mark_taint, taint_from_baggage
 
 
 class _HttpClient(Protocol):
@@ -49,6 +50,12 @@ class A2AClient:
         with self.tracer.start_as_current_span(
             "a2a.call", kind=SpanKind.CLIENT, attributes=attributes
         ) as span:
+            # If the caller is inside a taint scope, mark the edge itself so the
+            # poisoned hop is visible on the Service Map.  Baggage is injected below,
+            # so the callee inherits the taint regardless of this stamp.
+            carried = taint_from_baggage()
+            if carried is not None:
+                mark_taint(span, carried)
             headers: dict[str, str] = {"content-type": "application/json"}
             inject_into(headers)
             try:

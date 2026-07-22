@@ -10,7 +10,13 @@ from .budget import BudgetChecker
 from .config import WatcherConfig
 from .cycle import find_cycles
 from .signals import OTLPSignalEmitter, Signal, SignalEmitter
-from .signoz_client import ClickHouseClient, SigNozClient, TimeRange, velocity_query
+from .signoz_client import (
+    ClickHouseClient,
+    SigNozClient,
+    TimeRange,
+    taint_blast_query,
+    velocity_query,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +111,8 @@ class LoopWatcher:
                     ),
                 )
 
+        self._detect_injection(window)
+
         lookback = TimeRange(end_ms - self.config.budget_lookback_sec * 1000, end_ms)
         for conversation_id, trace_id in self.budget.active_conversations(window):
             cost = self.budget.conversation_cost(conversation_id, lookback, trace_id)
@@ -119,6 +127,39 @@ class LoopWatcher:
                         cost.usd,
                         trace_id,
                         datetime.now(UTC),
+                    ),
+                )
+
+    def _detect_injection(self, window: TimeRange) -> None:
+        """Emit one injection_detected signal per (trace, origin) with the blast radius."""
+
+        # trace_id -> {(origin, category): set(services)}
+        blasts: dict[str, dict[tuple[str, str], set[str]]] = {}
+        for row in self.client.run_builder_query(taint_blast_query(), window):
+            trace_id = row.get("trace_id")
+            origin = row.get("agentmesh.taint.origin")
+            category = row.get("agentmesh.taint.category")
+            service = row.get("service.name")
+            if not all(isinstance(v, str) and v for v in (trace_id, origin, category, service)):
+                continue
+            blasts.setdefault(trace_id, {}).setdefault((origin, category), set()).add(service)
+
+        for trace_id, groups in blasts.items():
+            for (origin, category), services in groups.items():
+                blast = ",".join(sorted(services))
+                self._emit(
+                    (trace_id, f"injection:{origin}"),
+                    Signal(
+                        "injection_detected",
+                        None,
+                        None,
+                        None,
+                        None,
+                        trace_id,
+                        datetime.now(UTC),
+                        category=category,
+                        origin=origin,
+                        blast=blast,
                     ),
                 )
 
