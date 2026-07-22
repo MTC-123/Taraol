@@ -27,3 +27,8 @@ AGENTMESH_TAINT_HOPS = "agentmesh.taint.hops"
 # Circuit-breaker state stamped on a short-circuited a2a.call hop.
 AGENTMESH_BREAKER_STATE = "agentmesh.breaker.state"
 AGENTMESH_BREAKER_EDGE = "agentmesh.breaker.edge"
+
+# Output-quality marker: the producing agent stamps this when its output is judged
+# bad; provenance backtracks the trace to the shallowest flagged span (the origin).
+AGENTMESH_OUTPUT_FLAGGED = "agentmesh.output.flagged"
+AGENTMESH_OUTPUT_CATEGORY = "agentmesh.output.category"

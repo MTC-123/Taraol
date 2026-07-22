@@ -17,9 +17,7 @@ from collections.abc import Iterable
 from amr.cycle import Cycle
 
 
-def find_directed_cycles(
-    edges: Iterable[tuple[str, str]], min_repeats: int = 2
-) -> list[Cycle]:
+def find_directed_cycles(edges: Iterable[tuple[str, str]], min_repeats: int = 2) -> list[Cycle]:
     """Return elementary directed cycles whose edges each recur >= ``min_repeats``."""
 
     edge_list = [edge for edge in edges if edge[0] and edge[1]]

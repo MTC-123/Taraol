@@ -9,12 +9,14 @@ from fastapi import Request
 from opentelemetry import trace
 from opentelemetry.trace import Tracer
 
+from amr import semconv
 from amr.a2a import A2AClient, A2AError, A2AServer, EdgeBrokenError
 from amr.events import reasoning_event
 from amr.genai import agent_span, chat_span, record_chat_result, tool_span
 from amr.guardrail import INPUT, OUTPUT, scan
 from amr.llm import complete
 from amr.mesh import max_hops, next_targets
+from amr.quality import scan_output
 from amr.taint import Taint, mark_taint, taint_from_baggage, taint_scope
 
 logger = logging.getLogger(__name__)
@@ -61,6 +63,16 @@ def register_agent(server: A2AServer, name: str, tracer: Tracer) -> None:
                 # Content-free: only the category and this service name are recorded.
                 reasoning_event(
                     name, conversation_id, "taint_flagged", hop=hops, category=verdict.category
+                )
+
+            # Output-quality gate: stamp the producing agent's span so provenance can
+            # backtrack to it as the origin of any bad output that propagates downstream.
+            quality = scan_output(result.text)
+            if quality.flagged:
+                a_span.set_attribute(semconv.AGENTMESH_OUTPUT_FLAGGED, True)
+                a_span.set_attribute(semconv.AGENTMESH_OUTPUT_CATEGORY, quality.category)
+                reasoning_event(
+                    name, conversation_id, "output_flagged", hop=hops, category=quality.category
                 )
             reasoning_event(
                 name,
