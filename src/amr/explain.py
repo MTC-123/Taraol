@@ -59,6 +59,21 @@ def explain_trace(
     cyclic_agents = sorted(
         {service for cycle in cycles for service in _cycle_agents(cycle.services)}
     )
+    # Runaway evidence: how many times a cyclic agent repeated an identical state
+    # (no progress). A converging cycle produces a fresh state each iteration.
+    state_counts: dict[str, dict[str, int]] = {}
+    for span in rows:
+        service = _service(span)
+        if service not in cyclic_agents:
+            continue
+        state = _value(span, "agentmesh.state.hash")
+        if isinstance(state, str) and state:
+            bucket = state_counts.setdefault(service, {})
+            bucket[state] = bucket.get(state, 0) + 1
+    stalled_iterations = max(
+        (count for buckets in state_counts.values() for count in buckets.values()),
+        default=0,
+    )
     chat_cost = 0.0
     hop_count = 0
     for span in rows:
@@ -83,6 +98,9 @@ def explain_trace(
             for cycle in cycles
         ],
         "hop_count": hop_count,
+        # A cycle is only a runaway loop when a cyclic agent stalled on one state.
+        "runaway_loop": stalled_iterations >= 2,
+        "stalled_iterations": stalled_iterations,
         "direct_chat_cost_usd": round(chat_cost, 4),
         # A pause is an audit log, not a trace span. Never claim one from trace-only data.
         "pause_action": pauses[-1] if pauses else None,

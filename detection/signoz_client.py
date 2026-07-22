@@ -146,6 +146,7 @@ def trace_query(trace_id: str) -> dict[str, Any]:
                 _field("agentmesh.cost.usd"),
                 _field("agentmesh.output.flagged"),
                 _field("agentmesh.output.category"),
+                _field("agentmesh.state.hash"),
             ],
             "disabled": False,
             "limit": 1000,

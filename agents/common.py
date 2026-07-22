@@ -1,7 +1,9 @@
 """Shared implementation for the five deliberately tiny demo agents."""
 
+import hashlib
 import logging
 import os
+import re
 from typing import Any
 from uuid import uuid4
 
@@ -25,6 +27,17 @@ MODEL = os.environ.get("AMR_MODEL", "gpt-4.1-mini")
 
 def _target_url(target: str) -> str:
     return os.environ.get(f"{target.upper()}_A2A_URL", f"http://{target}:8000/a2a")
+
+
+def _state_hash(text: str) -> str:
+    """Non-reversible digest of normalized output — a content-safe progress marker.
+
+    Repeated identical hashes across loop iterations mean the agent is stuck; a
+    changing hash means the generator/critic loop is still making progress.
+    """
+
+    normalized = re.sub(r"\s+", " ", text.strip().lower())
+    return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:16]
 
 
 def _scan_boundary(prompt: str, output: str) -> "object":
@@ -57,6 +70,9 @@ def register_agent(server: A2AServer, name: str, tracer: Tracer) -> None:
                 result = complete(prompt, MODEL)
                 record_chat_result(span, result)
                 verdict = _scan_boundary(prompt, result.text)
+            # Content-safe progress marker: lets the watcher tell a stuck loop (repeated
+            # state) from a healthy generator/critic iteration (changing state).
+            a_span.set_attribute(semconv.AGENTMESH_STATE_HASH, _state_hash(result.text))
             local_taint = Taint(verdict.category, name, 0) if verdict.flagged else None
             if local_taint is not None:
                 mark_taint(span, local_taint)

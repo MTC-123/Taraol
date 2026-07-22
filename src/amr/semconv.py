@@ -32,3 +32,9 @@ AGENTMESH_BREAKER_EDGE = "agentmesh.breaker.edge"
 # bad; provenance backtracks the trace to the shallowest flagged span (the origin).
 AGENTMESH_OUTPUT_FLAGGED = "agentmesh.output.flagged"
 AGENTMESH_OUTPUT_CATEGORY = "agentmesh.output.category"
+
+# Progress markers separate a healthy generator/critic iteration from a runaway loop.
+# state.hash is a non-reversible digest of normalized output (content-safe); a repeated
+# hash across iterations means the agent is stuck, not making progress.
+AGENTMESH_STATE_HASH = "agentmesh.state.hash"
+AGENTMESH_PROGRESS_SCORE = "agentmesh.progress.score"
