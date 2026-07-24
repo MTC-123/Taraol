@@ -81,7 +81,8 @@ def _gemini_complete(prompt: str, model: str) -> LLMResult:
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("AMR_LLM_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is required when AMR_LLM=gemini")
-    endpoint = os.environ.get("AMR_LLM_ENDPOINT", _GEMINI_ENDPOINT)
+    # `or` (not get's default) so an empty AMR_LLM_ENDPOINT env still falls back.
+    endpoint = os.environ.get("AMR_LLM_ENDPOINT") or _GEMINI_ENDPOINT
     return _openai_compatible_complete(prompt, model, endpoint, api_key)
 
 

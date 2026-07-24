@@ -44,6 +44,21 @@ def test_gemini_routes_to_openai_compatible_endpoint(monkeypatch) -> None:
     assert result.finish_reason == "stop"
 
 
+def test_gemini_empty_endpoint_env_falls_back_to_default(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, **kwargs) -> httpx.Response:
+        captured["url"] = url
+        return _canned_response()
+
+    monkeypatch.setenv("AMR_LLM", "gemini")
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    monkeypatch.setenv("AMR_LLM_ENDPOINT", "")  # compose passes an empty string
+    monkeypatch.setattr(llm.httpx, "post", fake_post)
+    llm.complete("hi", "gemini-2.0-flash")
+    assert captured["url"] == llm._GEMINI_ENDPOINT
+
+
 def test_gemini_without_key_raises(monkeypatch) -> None:
     monkeypatch.setenv("AMR_LLM", "gemini")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
