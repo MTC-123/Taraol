@@ -11,7 +11,7 @@ from contextvars import ContextVar
 
 from opentelemetry.trace import SpanKind, Tracer
 
-from . import semconv
+from . import capture, semconv
 from .attributes import AttrNames, attrs
 from .config import Settings
 from .cost import CostModel, add_to_request_cost
@@ -26,13 +26,16 @@ def current_conversation_id() -> str | None:
 
 
 class ChatSpan:
-    """Wraps a chat span; ``record`` attaches usage and finalizes cost on exit."""
+    """Wraps a chat span; ``record`` attaches usage and finalizes direct cost on exit."""
 
-    def __init__(self, span: object, model: str, names: AttrNames, cost_model: CostModel) -> None:
+    def __init__(
+        self, span: object, model: str, names: AttrNames, cost_model: CostModel, settings: Settings
+    ) -> None:
         self._span = span
         self._model = model
         self._names = names
         self._cost = cost_model
+        self._settings = settings
         self._input = 0
         self._output = 0
         self._finish = "unknown"
@@ -47,12 +50,61 @@ class ChatSpan:
         self._span.set_attribute(semconv.GEN_AI_USAGE_OUTPUT_TOKENS, output_tokens)  # type: ignore[attr-defined]
         self._span.set_attribute(semconv.GEN_AI_RESPONSE_FINISH_REASONS, (finish_reason,))  # type: ignore[attr-defined]
 
+    def record_content(
+        self, *, prompt: str, completion: str, system: str | None = None
+    ) -> None:
+        """Capture prompt/completion as gen_ai messages — ONLY when capture_content is on."""
+
+        if not self._settings.capture_content:
+            return
+        limit = self._settings.content_max_chars
+        inp, t1 = capture.encode_messages("user", prompt, limit)
+        out, t2 = capture.encode_messages("assistant", completion, limit)
+        self._span.set_attribute(semconv.GEN_AI_INPUT_MESSAGES, inp)  # type: ignore[attr-defined]
+        self._span.set_attribute(semconv.GEN_AI_OUTPUT_MESSAGES, out)  # type: ignore[attr-defined]
+        truncated = t1 or t2
+        if system:
+            sysmsg, t3 = capture.encode_messages("system", system, limit)
+            self._span.set_attribute(semconv.GEN_AI_SYSTEM_INSTRUCTIONS, sysmsg)  # type: ignore[attr-defined]
+            truncated = truncated or t3
+        if truncated:
+            self._span.set_attribute(self._names.content_truncated, True)  # type: ignore[attr-defined]
+
     def _finalize(self) -> None:
         usd, unpriced = self._cost.cost_of(self._model, self._input, self._output)
-        self._span.set_attribute(self._names.cost_usd, usd)  # type: ignore[attr-defined]
+        self._span.set_attribute(self._names.cost_direct_usd, usd)  # type: ignore[attr-defined]
         if unpriced:
             self._span.set_attribute(self._names.cost_unpriced, True)  # type: ignore[attr-defined]
         add_to_request_cost(usd)
+
+
+class ToolSpan:
+    """Wraps an execute_tool span; captures tool arguments/result only when enabled."""
+
+    def __init__(self, span: object, names: AttrNames, settings: Settings) -> None:
+        self._span = span
+        self._names = names
+        self._settings = settings
+
+    @property
+    def span(self) -> object:
+        return self._span
+
+    def set_arguments(self, arguments: str) -> None:
+        if not self._settings.capture_content:
+            return
+        text, tr = capture.truncate(arguments, self._settings.content_max_chars)
+        self._span.set_attribute(semconv.GEN_AI_TOOL_CALL_ARGUMENTS, text)  # type: ignore[attr-defined]
+        if tr:
+            self._span.set_attribute(self._names.content_truncated, True)  # type: ignore[attr-defined]
+
+    def set_result(self, result: str) -> None:
+        if not self._settings.capture_content:
+            return
+        text, tr = capture.truncate(result, self._settings.content_max_chars)
+        self._span.set_attribute(semconv.GEN_AI_TOOL_CALL_RESULT, text)  # type: ignore[attr-defined]
+        if tr:
+            self._span.set_attribute(self._names.content_truncated, True)  # type: ignore[attr-defined]
 
 
 class Instrument:
@@ -98,22 +150,29 @@ class Instrument:
         with self.tracer.start_as_current_span(
             f"chat {model}", kind=SpanKind.CLIENT, attributes=attributes
         ) as span:
-            chat = ChatSpan(span, model, self.names, self.cost_model)
+            chat = ChatSpan(span, model, self.names, self.cost_model, self.settings)
             try:
                 yield chat
             finally:
                 chat._finalize()
 
     @contextmanager
-    def tool(self, tool_name: str) -> Iterator[object]:
+    def tool(self, tool_name: str, *, arguments: str | None = None) -> Iterator[ToolSpan]:
         with self.tracer.start_as_current_span(
             f"execute_tool {tool_name}",
             kind=SpanKind.INTERNAL,
             attributes={semconv.GEN_AI_OPERATION_NAME: semconv.EXECUTE_TOOL},
         ) as span:
-            yield span
+            tool = ToolSpan(span, self.names, self.settings)
+            if arguments is not None:
+                tool.set_arguments(arguments)
+            yield tool
 
-    def reasoning(self, stage: str, **fields: object) -> None:
+    def reasoning(self, stage: str, *, summary: str | None = None, **fields: object) -> None:
+        # Reasoning summary text is content — only include it when capture is enabled.
+        if summary is not None and self.settings.capture_content:
+            text, _ = capture.truncate(summary, self.settings.content_max_chars)
+            fields["reasoning.summary"] = text
         reasoning_event(
             self.names.reasoning_logger(),
             self.settings.service_name,

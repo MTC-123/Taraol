@@ -17,3 +17,11 @@ GEN_AI_CONVERSATION_ID = "gen_ai.conversation.id"
 CHAT = "chat"
 EXECUTE_TOOL = "execute_tool"
 INVOKE_AGENT = "invoke_agent"
+
+# Content-bearing gen_ai keys, only set when capture_content is enabled (opt-in).
+# These are the current GenAI-semconv message keys (structured JSON message lists).
+GEN_AI_INPUT_MESSAGES = "gen_ai.input.messages"
+GEN_AI_OUTPUT_MESSAGES = "gen_ai.output.messages"
+GEN_AI_SYSTEM_INSTRUCTIONS = "gen_ai.system_instructions"
+GEN_AI_TOOL_CALL_ARGUMENTS = "gen_ai.tool.call.arguments"
+GEN_AI_TOOL_CALL_RESULT = "gen_ai.tool.call.result"

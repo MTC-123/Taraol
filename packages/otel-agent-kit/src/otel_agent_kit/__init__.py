@@ -13,14 +13,15 @@ Security/quality overlays are one extra call: ``kit.mark_injection(...)``,
 per-edge circuit breaker (``get_registry``) are exported for detectors.
 """
 
-from . import assets, breaker, guardrail, provenance, quality, taint
+from . import assets, breaker, capture, guardrail, llm, provenance, quality, replay, taint
 from .attributes import AttrNames, attrs
 from .config import Settings
 from .cost import CostAccumulator, CostModel, add_to_request_cost, request_cost_scope
 from .cycle import Cycle, find_cycles, find_directed_cycles
-from .facade import ChatSpan, Instrument, current_conversation_id
+from .facade import ChatSpan, Instrument, ToolSpan, current_conversation_id
 from .propagation import extract_from, inject_into
 from .provenance import origin_of_bad_output
+from .replay import Step, ToolCall, build_steps
 from .setup import configure, instrument
 
 __version__ = "0.1.0"
@@ -30,7 +31,10 @@ __all__ = [
     "configure",
     "Instrument",
     "ChatSpan",
+    "ToolSpan",
     "Settings",
+    "capture",
+    "llm",
     "AttrNames",
     "attrs",
     "CostModel",
@@ -41,6 +45,10 @@ __all__ = [
     "find_cycles",
     "find_directed_cycles",
     "origin_of_bad_output",
+    "replay",
+    "build_steps",
+    "Step",
+    "ToolCall",
     "current_conversation_id",
     "inject_into",
     "extract_from",

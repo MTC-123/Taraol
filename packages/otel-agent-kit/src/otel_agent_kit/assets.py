@@ -40,3 +40,23 @@ def dump_dashboards(dest: str | Path) -> list[Path]:
         path.write_text(json.dumps(dashboard(name), indent=2), encoding="utf-8")
         written.append(path)
     return written
+
+
+def list_alerts() -> list[str]:
+    """Names of the bundled SigNoz alert-rule fixtures (loop/budget/edge/xconv)."""
+
+    root = resources.files("otel_agent_kit.data.alerts")
+    return sorted(e.name[:-5] for e in root.iterdir() if e.name.endswith(".json"))
+
+
+def alert(name: str) -> dict[str, Any]:
+    """Return a bundled alert-rule fixture as parsed JSON."""
+
+    text = resources.files("otel_agent_kit.data.alerts").joinpath(f"{name}.json").read_text("utf-8")
+    return json.loads(text)
+
+
+def terraform_module_path() -> Path:
+    """Filesystem path to the bundled Terraform alert module (point a `module {}` at it)."""
+
+    return Path(str(resources.files("otel_agent_kit.data").joinpath("terraform")))

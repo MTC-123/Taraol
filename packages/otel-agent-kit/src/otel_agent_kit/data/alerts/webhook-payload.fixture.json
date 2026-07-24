@@ -1,0 +1,21 @@
+{
+  "receiver": "agentmesh-controller",
+  "status": "firing",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "loop-detected",
+        "conversation_id": "demo-conversation",
+        "edge": "critic -> writer",
+        "trace_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "amr.enforcement": "controller"
+      },
+      "annotations": {
+        "summary": "Agent mesh loop detected for demo-conversation"
+      },
+      "fingerprint": "sanitized"
+    }
+  ],
+  "version": "4"
+}

@@ -16,8 +16,18 @@ class AttrNames:
     namespace: str
 
     @property
-    def cost_usd(self) -> str:
-        return f"{self.namespace}.cost.usd"
+    def cost_direct_usd(self) -> str:
+        # Cost of one agent's own chat call; summing these by conversation is additive.
+        return f"{self.namespace}.cost.direct_usd"
+
+    @property
+    def cost_downstream_usd(self) -> str:
+        # Callee-subtree cost on an a2a hop span (a per-delegation attribution, not additive).
+        return f"{self.namespace}.cost.downstream_usd"
+
+    @property
+    def cost_conversation_total_usd(self) -> str:
+        return f"{self.namespace}.cost.conversation_total_usd"
 
     @property
     def cost_unpriced(self) -> str:
@@ -58,6 +68,14 @@ class AttrNames:
     @property
     def output_category(self) -> str:
         return f"{self.namespace}.output.category"
+
+    @property
+    def state_hash(self) -> str:
+        return f"{self.namespace}.state.hash"
+
+    @property
+    def content_truncated(self) -> str:
+        return f"{self.namespace}.content.truncated"
 
     def reasoning_logger(self) -> str:
         return f"{self.namespace}.reasoning"

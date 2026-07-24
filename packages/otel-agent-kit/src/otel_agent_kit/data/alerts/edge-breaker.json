@@ -1,0 +1,40 @@
+{
+  "alert": "edge-breaker",
+  "alert_type": "LOGS_BASED_ALERT",
+  "severity": "critical",
+  "version": "v5",
+  "rule_type": "threshold_rule",
+  "eval_window": "30s",
+  "frequency": "10s",
+  "description": "Trip breaker: edge=$edge trace=$trace_id; count={{$value}}",
+  "summary": "Agent mesh edge unhealthy: $edge",
+  "labels": {
+    "amr.enforcement": "controller"
+  },
+  "condition": {
+    "compositeQuery": {
+      "queryType": "builder",
+      "panelType": "graph",
+      "queries": [
+        {
+          "type": "builder_query",
+          "spec": {
+            "name": "A",
+            "signal": "logs",
+            "stepInterval": 60,
+            "aggregations": [{"expression": "count()", "alias": "count"}],
+            "filter": {"expression": "signal = 'edge_unhealthy'"},
+            "groupBy": ["edge", "trace_id"]
+          }
+        }
+      ]
+    },
+    "selectedQueryName": "A",
+    "thresholds": {
+      "kind": "basic",
+      "spec": [{"name": "critical", "target": 0, "op": "1", "matchType": "1", "channels": ["agentmesh-controller"]}]
+    }
+  },
+  "evaluation": {"kind": "rolling", "spec": {"evalWindow": "30s", "frequency": "10s", "matchType": "at_least_once"}},
+  "notification_settings": {"group_by": ["edge", "trace_id"], "use_policy": true}
+}

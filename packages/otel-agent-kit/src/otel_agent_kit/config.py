@@ -10,6 +10,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "on", "yes"}
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     service_name: str
@@ -20,6 +24,10 @@ class Settings:
     endpoint: str | None = None  # else OTEL_EXPORTER_OTLP_ENDPOINT
     enable_logs: bool = True
     pricing_path: str | Path | None = None  # else the bundled default table
+    # Opt-in LangSmith-style content capture. Default OFF: no prompt/output/tool text is
+    # ever recorded. When on, captured text is truncated to content_max_chars per field.
+    capture_content: bool = False
+    content_max_chars: int = 12000
 
     @classmethod
     def from_env(cls, service_name: str | None = None, **overrides: object) -> "Settings":
@@ -40,6 +48,9 @@ class Settings:
             else "grpc",
             endpoint=os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"),
             pricing_path=os.environ.get("OAK_PRICING_FILE"),
+            capture_content=_env_flag("OAK_CAPTURE_CONTENT")
+            or _env_flag("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"),
+            content_max_chars=int(os.environ.get("OAK_CONTENT_MAX_CHARS", "12000")),
         )
         # Keyword overrides win over environment.
         clean = {k: v for k, v in overrides.items() if k != "service_name" and v is not None}

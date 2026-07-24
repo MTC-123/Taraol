@@ -15,9 +15,17 @@ dependencies = [
 
 [project.optional-dependencies]
 http = ["opentelemetry-exporter-otlp-proto-http>=1.28.0"]
-# Reserved for the JSON-RPC A2A transport + framework adapters (see integrations/).
+# JSON-RPC agent-to-agent transport (integrations/a2a).
 a2a = ["fastapi>=0.115.0", "uvicorn>=0.32.0", "httpx>=0.28.0"]
-all = ["otel-agent-kit[http]"]
+# Loop/budget/injection/breaker watcher + controller (detection/).
+detection = ["httpx>=0.28.0", "fastapi>=0.115.0", "uvicorn>=0.32.0"]
+# Grounded incident explanation over the official SigNoz MCP server (mcp/).
+mcp = ["mcp>=1.28.1"]
+# Real web search tool (tools/search.py); the fake provider needs no extra.
+search = ["httpx>=0.28.0"]
+# Real LLM providers (gemini/openai-compatible) via the kit's llm module.
+llm = ["httpx>=0.28.0"]
+all = ["otel-agent-kit[http,a2a,detection,mcp,search,llm]"]
 
 [project.scripts]
 otel-agent-kit = "otel_agent_kit.cli:main"
