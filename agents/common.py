@@ -36,7 +36,10 @@ def _state_hash(text: str) -> str:
     changing hash means the generator/critic loop is still making progress.
     """
 
-    normalized = re.sub(r"\s+", " ", text.strip().lower())
+    # Strip incidental digits (hop counters, ids, timestamps) so "progress" means a
+    # real change in the work product, not a ticking counter. An agent re-emitting the
+    # same content each iteration therefore hashes identically = stuck = no progress.
+    normalized = re.sub(r"\d+", "", re.sub(r"\s+", " ", text.strip().lower()))
     return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:16]
 
 

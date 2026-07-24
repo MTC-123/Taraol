@@ -34,7 +34,8 @@ class WatcherConfig:
     xconv_min_repeats: int = 1
     # A cycle is only a runaway loop when the agent stops progressing (repeated state)
     # or hop count crosses this hard cap; below it, a converging cycle is left alone.
-    loop_iteration_hard_cap: int = 12
+    # 8 sits above a healthy bounded loop (~4-6 iterations) and below a storm (~11).
+    loop_iteration_hard_cap: int = 8
 
     @classmethod
     def from_env(cls) -> "WatcherConfig":
