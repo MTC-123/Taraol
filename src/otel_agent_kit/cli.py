@@ -1,13 +1,41 @@
-"""Operator CLI: bundled SigNoz dashboards + incident explain / per-step replay."""
+"""Operator CLI: bundled SigNoz (up/down + dashboards) + incident explain / replay."""
 
 import argparse
+import os
+import subprocess
+import uuid
 
 from . import assets
+
+
+def _signoz(action: str) -> None:
+    compose = assets.signoz_compose_path()
+    if not compose.exists():
+        raise SystemExit(f"bundled SigNoz compose not found at {compose}")
+    env = dict(os.environ)
+    if action == "up":
+        if not env.get("SIGNOZ_TOKENIZER_JWT_SECRET"):
+            env["SIGNOZ_TOKENIZER_JWT_SECRET"] = uuid.uuid4().hex
+            print("note: generated a throwaway SIGNOZ_TOKENIZER_JWT_SECRET (set one to persist).")
+        cmd = ["docker", "compose", "-f", str(compose), "up", "-d"]
+    else:
+        cmd = ["docker", "compose", "-f", str(compose), "down", "-v"]
+    result = subprocess.run(cmd, env=env, check=False)
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
+    if action == "up":
+        print("\nSigNoz starting. UI: http://localhost:8080")
+        print("Point your agents at it:  OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317")
+        print("Import dashboards:        otel-agent-kit dump-dashboards ./dashboards")
+        print("Stop + wipe:              otel-agent-kit signoz down")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="otel-agent-kit")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    signoz = commands.add_parser("signoz", help="start/stop a local bundled SigNoz backend")
+    signoz.add_argument("action", choices=["up", "down"])
 
     commands.add_parser("list-dashboards", help="list bundled dashboards")
     dump = commands.add_parser("dump-dashboards", help="write bundled dashboards to a directory")
@@ -22,7 +50,9 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    if args.command == "list-dashboards":
+    if args.command == "signoz":
+        _signoz(args.action)
+    elif args.command == "list-dashboards":
         for name in assets.list_dashboards():
             print(name)
     elif args.command == "dump-dashboards":

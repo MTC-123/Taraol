@@ -19,6 +19,20 @@ pip install "otel-agent-kit[all]"               # + transport, detection, mcp, s
 Extras: `[a2a]` JSON-RPC agent transport · `[detection]` loop/breaker watcher + controller ·
 `[mcp]` grounded incident explain · `[search]` Tavily web search · `[http]` HTTP OTLP exporter.
 
+## Get a SigNoz backend
+
+The kit is the OTLP **client** — it sends telemetry to a SigNoz backend (SigNoz doesn't come
+in the wheel; it's a full platform). Pick one:
+
+```sh
+otel-agent-kit signoz up        # boot a local SigNoz (bundled Foundry deploy; pulls images once)
+# → UI at http://localhost:8080, OTLP at http://localhost:4317
+otel-agent-kit signoz down      # stop + wipe
+```
+
+…or point the kit at **SigNoz Cloud** / an existing collector via
+`OTEL_EXPORTER_OTLP_ENDPOINT`. That's the only wiring the kit needs.
+
 ## Three lines
 
 ```python

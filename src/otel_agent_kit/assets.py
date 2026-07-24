@@ -58,3 +58,15 @@ def terraform_module_path() -> Path:
     """Filesystem path to the bundled Terraform alert module (point a `module {}` at it)."""
 
     return Path(str(resources.files("otel_agent_kit.data").joinpath("terraform")))
+
+
+def signoz_deploy_path() -> Path:
+    """Filesystem path to the bundled SigNoz (Foundry) deployment directory."""
+
+    return Path(str(resources.files("otel_agent_kit.data").joinpath("signoz")))
+
+
+def signoz_compose_path() -> Path:
+    """Path to the bundled SigNoz docker-compose file (used by ``signoz up``)."""
+
+    return signoz_deploy_path() / "pours" / "deployment" / "compose.yaml"
