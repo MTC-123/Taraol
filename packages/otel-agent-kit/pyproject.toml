@@ -1,0 +1,37 @@
+[project]
+name = "otel-agent-kit"
+version = "0.1.0"
+description = "Drop-in OpenTelemetry instrumentation for multi-agent systems: gen_ai spans, cross-process traceparent, cost rollup, loop/injection/breaker/provenance analysis — in ~3 lines."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Apache-2.0" }
+keywords = ["opentelemetry", "otel", "observability", "ai-agents", "gen_ai", "signoz"]
+dependencies = [
+    "opentelemetry-api>=1.28.0",
+    "opentelemetry-sdk>=1.28.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.28.0",
+    "pyyaml>=6.0.2",
+]
+
+[project.optional-dependencies]
+http = ["opentelemetry-exporter-otlp-proto-http>=1.28.0"]
+# Reserved for the JSON-RPC A2A transport + framework adapters (see integrations/).
+a2a = ["fastapi>=0.115.0", "uvicorn>=0.32.0", "httpx>=0.28.0"]
+all = ["otel-agent-kit[http]"]
+
+[project.scripts]
+otel-agent-kit = "otel_agent_kit.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/otel_agent_kit"]
+# Data files (pricing.yaml, dashboards/*.json) live inside the package and are
+# included automatically; artifacts ensures they ship even if git-ignored.
+artifacts = ["src/otel_agent_kit/data/**"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

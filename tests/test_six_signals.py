@@ -29,7 +29,7 @@ def test_six_signals_are_exercised_by_the_demo_contract() -> None:
             "parent_span_id": "7",
             "serviceName": "writer",
             "name": "chat",
-            "attributes": {"gen_ai.operation.name": "chat", "agentmesh.cost.usd": 0.0012},
+            "attributes": {"gen_ai.operation.name": "chat", "agentmesh.cost.direct_usd": 0.0012},
         },
     ]
     audit = [{"body": "agent_paused", "trace_id": "a" * 32, "conversation_id": "demo"}]
@@ -42,7 +42,7 @@ def test_six_signals_are_exercised_by_the_demo_contract() -> None:
     edge = _dashboard("cost-per-edge.json")
     serialized = json.dumps(edge)
     assert "signoz_calls_total" in serialized and "signoz_latency_bucket" in serialized
-    assert "agentmesh.cost.usd" in serialized and "agentmesh.src" in serialized
+    assert "agentmesh.cost.downstream_usd" in serialized and "agentmesh.src" in serialized
     event_source = (ROOT / "src" / "amr" / "events.py").read_text(encoding="utf-8")
     assert "agent_reasoning" in event_source and "conversation_id" in event_source
 

@@ -15,11 +15,18 @@ lint:
 fmt:
 	uv run ruff format .
 
-demo:
-	uv run python scripts/demo.py
-
+# demo-full is the SUBMISSION demo: the real closed loop through SigNoz
+# (telemetry -> SigNoz alert rule -> notification webhook -> controller -> breaker
+# -> agent_paused -> SigNoz verification). Requires a SigNoz API key + the one-time
+# notification-channel UI step (see docs/DEMO.md).
 demo-full:
 	uv run python scripts/demo.py --full
+
+# demo is the offline, no-secret FALLBACK for repository reviewers: it verifies the
+# real loop-watcher signal, then delivers the Alertmanager-shaped webhook itself
+# (the substitution is printed loudly). Do not record this as the submission demo.
+demo:
+	uv run python scripts/demo.py
 
 verify-demo: demo
 

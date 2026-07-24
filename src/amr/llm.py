@@ -34,14 +34,14 @@ def _fake_complete(prompt: str, model: str) -> LLMResult:
     )
 
 
-def _real_complete(prompt: str, model: str) -> LLMResult:
-    """Call an OpenAI-compatible chat-completions endpoint when explicitly enabled."""
+# Gemini ships an OpenAI-compatible surface, so one client covers both providers.
+_GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
 
-    endpoint = os.environ.get("AMR_LLM_ENDPOINT")
-    if not endpoint:
-        raise RuntimeError("AMR_LLM_ENDPOINT is required when AMR_LLM=real")
+
+def _openai_compatible_complete(prompt: str, model: str, endpoint: str, api_key: str) -> LLMResult:
+    """Call any OpenAI-compatible chat-completions endpoint and read reported usage."""
+
     headers = {"content-type": "application/json"}
-    api_key = os.environ.get("AMR_LLM_API_KEY")
     if api_key:
         headers["authorization"] = f"Bearer {api_key}"
     response = httpx.post(
@@ -64,9 +64,34 @@ def _real_complete(prompt: str, model: str) -> LLMResult:
     )
 
 
-def complete(prompt: str, model: str) -> LLMResult:
-    """Complete a prompt. ``AMR_LLM=fake`` is deterministic and the default."""
+def _real_complete(prompt: str, model: str) -> LLMResult:
+    """Call a configured OpenAI-compatible endpoint (``AMR_LLM=real``)."""
 
-    if os.environ.get("AMR_LLM", "fake").lower() == "real":
+    endpoint = os.environ.get("AMR_LLM_ENDPOINT")
+    if not endpoint:
+        raise RuntimeError("AMR_LLM_ENDPOINT is required when AMR_LLM=real")
+    return _openai_compatible_complete(
+        prompt, model, endpoint, os.environ.get("AMR_LLM_API_KEY", "")
+    )
+
+
+def _gemini_complete(prompt: str, model: str) -> LLMResult:
+    """Call Gemini via its OpenAI-compatible endpoint (``AMR_LLM=gemini``)."""
+
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("AMR_LLM_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is required when AMR_LLM=gemini")
+    # `or` (not get's default) so an empty AMR_LLM_ENDPOINT env still falls back.
+    endpoint = os.environ.get("AMR_LLM_ENDPOINT") or _GEMINI_ENDPOINT
+    return _openai_compatible_complete(prompt, model, endpoint, api_key)
+
+
+def complete(prompt: str, model: str) -> LLMResult:
+    """Complete a prompt. ``AMR_LLM`` selects the provider; ``fake`` is the default."""
+
+    provider = os.environ.get("AMR_LLM", "fake").lower()
+    if provider == "real":
         return _real_complete(prompt, model)
+    if provider == "gemini":
+        return _gemini_complete(prompt, model)
     return _fake_complete(prompt, model)

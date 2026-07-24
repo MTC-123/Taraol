@@ -34,6 +34,9 @@ services:
       OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
       AMR_LLM: ${AMR_LLM:-fake}
       AMR_MODEL: ${AMR_MODEL:-gpt-4.1-mini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AMR_LLM_ENDPOINT: ${AMR_LLM_ENDPOINT:-}
+      AMR_LLM_API_KEY: ${AMR_LLM_API_KEY:-}
       AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
       RESEARCHER_A2A_URL: http://researcher:8000/a2a
     ports:
@@ -55,6 +58,9 @@ services:
       OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
       AMR_LLM: ${AMR_LLM:-fake}
       AMR_MODEL: ${AMR_MODEL:-gpt-4.1-mini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AMR_LLM_ENDPOINT: ${AMR_LLM_ENDPOINT:-}
+      AMR_LLM_API_KEY: ${AMR_LLM_API_KEY:-}
       AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
       WRITER_A2A_URL: http://writer:8000/a2a
     networks:
@@ -73,6 +79,9 @@ services:
       OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
       AMR_LLM: ${AMR_LLM:-fake}
       AMR_MODEL: ${AMR_MODEL:-gpt-4.1-mini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AMR_LLM_ENDPOINT: ${AMR_LLM_ENDPOINT:-}
+      AMR_LLM_API_KEY: ${AMR_LLM_API_KEY:-}
       AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
       CRITIC_A2A_URL: http://critic:8000/a2a
     networks:
@@ -91,6 +100,9 @@ services:
       OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
       AMR_LLM: ${AMR_LLM:-fake}
       AMR_MODEL: ${AMR_MODEL:-gpt-4.1-mini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AMR_LLM_ENDPOINT: ${AMR_LLM_ENDPOINT:-}
+      AMR_LLM_API_KEY: ${AMR_LLM_API_KEY:-}
       AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
       ROUTER_A2A_URL: http://router:8000/a2a
       WRITER_A2A_URL: http://writer:8000/a2a
@@ -110,6 +122,9 @@ services:
       OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
       AMR_LLM: ${AMR_LLM:-fake}
       AMR_MODEL: ${AMR_MODEL:-gpt-4.1-mini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AMR_LLM_ENDPOINT: ${AMR_LLM_ENDPOINT:-}
+      AMR_LLM_API_KEY: ${AMR_LLM_API_KEY:-}
       AMR_LOOP_MODE: ${AMR_LOOP_MODE:-off}
     networks:
       - signoz-network

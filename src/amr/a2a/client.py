@@ -115,6 +115,8 @@ class A2AClient:
                     # added to the enclosing server request so its parent can return
                     # the complete subtree to its caller.
                     normalized_cost = round(float(cost_usd), 4)
-                    span.set_attribute("agentmesh.cost.usd", normalized_cost)
+                    # Callee subtree cost attributed to this delegation edge. NOT additive
+                    # across edges — use it to see which path drives downstream cost.
+                    span.set_attribute(semconv.AGENTMESH_COST_DOWNSTREAM_USD, normalized_cost)
                     add_to_request_cost(normalized_cost)
             return result

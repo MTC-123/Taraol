@@ -38,9 +38,11 @@ def _trace_query(trace_id: str) -> dict[str, Any]:
                 {"name": "name", "fieldContext": "span"},
                 {"name": "service.name", "fieldContext": "resource"},
                 {"name": "gen_ai.operation.name", "fieldContext": "span"},
-                {"name": "agentmesh.cost.usd", "fieldContext": "span"},
+                {"name": "agentmesh.cost.direct_usd", "fieldContext": "span"},
+                {"name": "agentmesh.cost.downstream_usd", "fieldContext": "span"},
                 {"name": "agentmesh.output.flagged", "fieldContext": "span"},
                 {"name": "agentmesh.output.category", "fieldContext": "span"},
+                {"name": "agentmesh.state.hash", "fieldContext": "span"},
             ],
             "disabled": False,
             "limit": 1000,
@@ -169,6 +171,12 @@ def _cycle_only(agents: list[str]) -> str:
     return " → ".join(agents)
 
 
+def _runaway_text(facts: Mapping[str, Any]) -> str:
+    if not facts.get("runaway_loop"):
+        return "no (cycle progressing or none observed)"
+    return f"yes — state unchanged for {facts.get('stalled_iterations', 0)} iterations"
+
+
 def format_explanation(facts: Mapping[str, Any]) -> str:
     """Human-readable terminal output for the post-incident beat."""
 
@@ -196,6 +204,7 @@ def format_explanation(facts: Mapping[str, Any]) -> str:
             f"Trace:        {facts.get('trace_id', 'unknown')}",
             f"Services:     {', '.join(facts.get('services', []))}",
             f"Cycle:        {'; '.join(paths) or 'none observed'}",
+            f"Runaway:      {_runaway_text(facts)}",
             f"A2A hops:     {facts.get('hop_count', 0)}",
             f"Direct cost:  USD {float(facts.get('direct_chat_cost_usd', 0.0)):.4f}",
             f"Bad output:   {provenance_text}",

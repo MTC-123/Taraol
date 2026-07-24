@@ -1,0 +1,7 @@
+# USD per 1,000 tokens. Prices are configuration, not pricing advice.
+# Override with a dict, a YAML file, or the OAK_PRICING_FILE environment variable.
+models:
+  # source: https://openai.com/api/pricing/ (retrieved 2026-07-17)
+  gpt-4.1-mini:
+    input_per_1k: 0.0004
+    output_per_1k: 0.0016

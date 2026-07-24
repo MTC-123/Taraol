@@ -51,9 +51,11 @@ def chat_span(tracer: Tracer, model: str) -> Iterator[object]:
             input_tokens = span.attributes.get(semconv.GEN_AI_USAGE_INPUT_TOKENS, 0)  # type: ignore[attr-defined]
             output_tokens = span.attributes.get(semconv.GEN_AI_USAGE_OUTPUT_TOKENS, 0)  # type: ignore[attr-defined]
             cost_usd, unpriced = cost_of(model, input_tokens, output_tokens)
-            span.set_attribute("agentmesh.cost.usd", cost_usd)  # type: ignore[attr-defined]
+            # Direct cost of this chat call only — summing these by conversation is the
+            # additive conversation total.
+            span.set_attribute(semconv.AGENTMESH_COST_DIRECT_USD, cost_usd)  # type: ignore[attr-defined]
             if unpriced:
-                span.set_attribute("agentmesh.cost.unpriced", True)  # type: ignore[attr-defined]
+                span.set_attribute(semconv.AGENTMESH_COST_UNPRICED, True)  # type: ignore[attr-defined]
             add_to_request_cost(cost_usd)
 
 

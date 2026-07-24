@@ -17,6 +17,17 @@ CHAT = "chat"
 EXECUTE_TOOL = "execute_tool"
 INVOKE_AGENT = "invoke_agent"
 
+# Cost attribution, split so values are unambiguous and never double-counted:
+#   direct_usd             — cost incurred directly by one agent invocation (chat spans)
+#   downstream_usd         — cost of the callee subtree, on the a2a.call hop span
+#   conversation_total_usd — total for the conversation, written once on the root span
+# Summing direct_usd by conversation gives the additive total; summing the hop
+# downstream_usd would double count and is only a per-delegation attribution.
+AGENTMESH_COST_DIRECT_USD = "agentmesh.cost.direct_usd"
+AGENTMESH_COST_DOWNSTREAM_USD = "agentmesh.cost.downstream_usd"
+AGENTMESH_COST_CONVERSATION_TOTAL_USD = "agentmesh.cost.conversation_total_usd"
+AGENTMESH_COST_UNPRICED = "agentmesh.cost.unpriced"
+
 # Project-namespaced attributes (never fake gen_ai.* keys).  Taint marks spans in
 # the injection blast radius; values are verdicts/categories only, never content.
 AGENTMESH_TAINT = "agentmesh.taint"
@@ -32,3 +43,9 @@ AGENTMESH_BREAKER_EDGE = "agentmesh.breaker.edge"
 # bad; provenance backtracks the trace to the shallowest flagged span (the origin).
 AGENTMESH_OUTPUT_FLAGGED = "agentmesh.output.flagged"
 AGENTMESH_OUTPUT_CATEGORY = "agentmesh.output.category"
+
+# Progress markers separate a healthy generator/critic iteration from a runaway loop.
+# state.hash is a non-reversible digest of normalized output (content-safe); a repeated
+# hash across iterations means the agent is stuck, not making progress.
+AGENTMESH_STATE_HASH = "agentmesh.state.hash"
+AGENTMESH_PROGRESS_SCORE = "agentmesh.progress.score"

@@ -35,15 +35,50 @@ def _now_ms(clock: Callable[[], float]) -> int:
     return int(clock() * 1000)
 
 
+def _attr(span: dict[str, Any], key: str) -> Any:
+    value = span.get(key)
+    if value is None:
+        attrs = span.get("attributes", {})
+        if isinstance(attrs, dict):
+            value = attrs.get(key)
+    return value
+
+
+def _service_of(span: dict[str, Any]) -> str | None:
+    resource = span.get("resource", {})
+    if isinstance(resource, dict) and isinstance(resource.get("service.name"), str):
+        return resource["service.name"]
+    for key in ("service.name", "serviceName"):
+        value = _attr(span, key)
+        if isinstance(value, str):
+            return value
+    return None
+
+
 def _conversation_id(spans: list[dict[str, Any]]) -> str | None:
     for span in spans:
-        attrs = span.get("attributes", {})
-        value = span.get("gen_ai.conversation.id")
-        if not isinstance(value, str) and isinstance(attrs, dict):
-            value = attrs.get("gen_ai.conversation.id")
+        value = _attr(span, "gen_ai.conversation.id")
         if isinstance(value, str) and value:
             return value
     return None
+
+
+def _repeated_state(spans: list[dict[str, Any]], services: set[str]) -> bool:
+    """True if any cyclic agent emitted the same state hash twice (no progress)."""
+
+    seen: dict[str, set[str]] = {}
+    for span in spans:
+        service = _service_of(span)
+        if service not in services:
+            continue
+        state = _attr(span, "agentmesh.state.hash")
+        if not isinstance(state, str) or not state:
+            continue
+        bucket = seen.setdefault(service, set())
+        if state in bucket:
+            return True
+        bucket.add(state)
+    return False
 
 
 class LoopWatcher:
@@ -107,19 +142,31 @@ class LoopWatcher:
                 for cycle in find_cycles(spans, self.config.loop_max_repeats)
                 if (src, target) in cycle.edges
             ]
-            if conversation_id and matching:
-                self._emit(
-                    (conversation_id, edge),
-                    Signal(
-                        "loop_detected",
-                        conversation_id,
-                        edge,
-                        hops,
-                        None,
-                        trace_id,
-                        datetime.now(UTC),
-                    ),
-                )
+            if not (conversation_id and matching):
+                continue
+            # A cycle alone is not an incident — a generator/critic loop is often
+            # intentional. Only flag runaway loops: no progress (repeated state) or a
+            # breached iteration hard cap. Cost-budget breaches fire their own signal.
+            cyclic_services = {service for cycle in matching for service in cycle.services}
+            if _repeated_state(spans, cyclic_services):
+                reason = "repeated_state"
+            elif hops > self.config.loop_iteration_hard_cap:
+                reason = "iteration_cap"
+            else:
+                continue
+            self._emit(
+                (conversation_id, edge),
+                Signal(
+                    "loop_detected",
+                    conversation_id,
+                    edge,
+                    hops,
+                    None,
+                    trace_id,
+                    datetime.now(UTC),
+                    reason=reason,
+                ),
+            )
 
         for edge_label, total in edge_totals.items():
             if total > self.config.breaker_edge_max:
@@ -237,13 +284,30 @@ class LoopWatcher:
             self.sleeper(self.config.poll_interval_sec)
 
 
+def make_client(config: WatcherConfig) -> _Client:
+    """Select the detection backend.
+
+    SigNoz's v5 Query API is the primary path: the watcher uses SigNoz itself
+    (its query engine, the same one behind dashboards and alerts), not its storage.
+    Direct ClickHouse access is an explicit, no-secret fallback for local demos and
+    is only chosen when no SigNoz API key is configured.
+    """
+
+    if config.signoz_api_key:
+        logger.info("detection backend: SigNoz Query API (%s)", config.signoz_url)
+        return SigNozClient(config.signoz_url, config.signoz_api_key)
+    if config.signoz_clickhouse_url:
+        logger.warning(
+            "detection backend: direct ClickHouse fallback (no SIGNOZ_API_KEY set); "
+            "set SIGNOZ_API_KEY to use the SigNoz Query API"
+        )
+        return ClickHouseClient(config.signoz_clickhouse_url)
+    raise ValueError("set SIGNOZ_API_KEY (preferred) or SIGNOZ_CLICKHOUSE_URL (fallback)")
+
+
 def main() -> None:
     config = WatcherConfig.from_env()
-    client = (
-        ClickHouseClient(config.signoz_clickhouse_url)
-        if config.signoz_clickhouse_url
-        else SigNozClient(config.signoz_url, config.signoz_api_key)
-    )
+    client = make_client(config)
     emitter = OTLPSignalEmitter(config.otlp_endpoint)
     try:
         LoopWatcher(client, config, emitter).run_forever()

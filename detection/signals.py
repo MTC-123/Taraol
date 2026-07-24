@@ -31,6 +31,8 @@ class Signal:
     category: str | None = None
     origin: str | None = None
     blast: str | None = None
+    # Why a loop was classified runaway: "repeated_state" | "iteration_cap" | "cost_budget".
+    reason: str | None = None
 
     def attributes(self) -> dict[str, str | int | float]:
         return {

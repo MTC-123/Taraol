@@ -32,6 +32,10 @@ class WatcherConfig:
     signoz_clickhouse_url: str | None = None
     breaker_edge_max: int = 10
     xconv_min_repeats: int = 1
+    # A cycle is only a runaway loop when the agent stops progressing (repeated state)
+    # or hop count crosses this hard cap; below it, a converging cycle is left alone.
+    # 8 sits above a healthy bounded loop (~4-6 iterations) and below a storm (~11).
+    loop_iteration_hard_cap: int = 8
 
     @classmethod
     def from_env(cls) -> "WatcherConfig":
@@ -52,4 +56,5 @@ class WatcherConfig:
             signoz_clickhouse_url=clickhouse_url,
             breaker_edge_max=_positive_int("AMR_BREAKER_EDGE_MAX", 10),
             xconv_min_repeats=_positive_int("AMR_XCONV_MIN_REPEATS", 1),
+            loop_iteration_hard_cap=_positive_int("AMR_LOOP_ITERATION_HARD_CAP", 12),
         )

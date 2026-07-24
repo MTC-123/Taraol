@@ -26,7 +26,7 @@ def test_genai_helpers_emit_pinned_attributes_without_content() -> None:
     assert chat.attributes[semconv.GEN_AI_REQUEST_MODEL] == "gpt-4.1-mini"
     assert chat.attributes[semconv.GEN_AI_USAGE_INPUT_TOKENS] > 0
     assert chat.attributes[semconv.GEN_AI_USAGE_OUTPUT_TOKENS] > 0
-    assert "agentmesh.cost.usd" in chat.attributes
+    assert "agentmesh.cost.direct_usd" in chat.attributes
     assert chat.attributes[semconv.GEN_AI_CONVERSATION_ID] == "conversation-1"
     assert "gen_ai.prompt" not in chat.attributes
     assert spans["execute_tool search_sources"].attributes[semconv.GEN_AI_OPERATION_NAME] == (

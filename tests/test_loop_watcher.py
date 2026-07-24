@@ -1,9 +1,9 @@
 from typing import Any
 
 from detection.config import WatcherConfig
-from detection.loop_watcher import LoopWatcher
+from detection.loop_watcher import LoopWatcher, make_client
 from detection.signals import RecordingEmitter
-from detection.signoz_client import TimeRange
+from detection.signoz_client import ClickHouseClient, SigNozClient, TimeRange
 
 TRACE_ID = "a" * 32
 
@@ -20,11 +20,13 @@ class FakeClient:
         cost: float = 0.02,
         tainted: bool = False,
         xconv_split: bool = False,
+        progressing: bool = False,
     ) -> None:
         self.looping = looping
         self.cost = cost
         self.tainted = tainted
         self.xconv_split = xconv_split
+        self.progressing = progressing
 
     def run_builder_query(self, query: dict[str, Any], _: TimeRange) -> list[dict[str, Any]]:
         name = query["spec"]["name"]
@@ -78,15 +80,28 @@ class FakeClient:
         services = ["planner", "writer", "critic", "writer", "critic", "writer", "critic"]
         if not self.looping:
             services = ["planner", "researcher", "writer", "critic"]
-        return [
-            {
-                "span_id": str(index),
-                "parent_span_id": "" if index == 0 else str(index - 1),
-                "resource": {"service.name": service},
-                "attributes": {"gen_ai.conversation.id": "c-1"} if index == 0 else {},
-            }
-            for index, service in enumerate(services)
-        ]
+
+        def state_hash(service: str, index: int) -> str:
+            # progressing=True -> a fresh hash each iteration (healthy convergence);
+            # otherwise the agent is stuck on one repeated state (runaway).
+            return f"{service}-{index}" if self.progressing else f"stuck-{service}"
+
+        spans: list[dict[str, Any]] = []
+        for index, service in enumerate(services):
+            attributes: dict[str, Any] = {}
+            if index == 0:
+                attributes["gen_ai.conversation.id"] = "c-1"
+            if service in {"writer", "critic"}:
+                attributes["agentmesh.state.hash"] = state_hash(service, index)
+            spans.append(
+                {
+                    "span_id": str(index),
+                    "parent_span_id": "" if index == 0 else str(index - 1),
+                    "resource": {"service.name": service},
+                    "attributes": attributes,
+                }
+            )
+        return spans
 
 
 def test_watcher_emits_confirmed_loop_and_budget_once_then_deduplicates() -> None:
@@ -99,6 +114,63 @@ def test_watcher_emits_confirmed_loop_and_budget_once_then_deduplicates() -> Non
     now[0] += 61
     watcher.poll_once()
     assert [signal.signal for signal in emitter.signals].count("loop_detected") == 2
+
+
+def test_signoz_query_api_is_the_default_detection_backend() -> None:
+    # API key present -> SigNoz Query API, even if a ClickHouse URL is also set.
+    with_key = WatcherConfig(
+        "http://signoz",
+        "key",
+        30,
+        3,
+        0.01,
+        5,
+        3600,
+        60,
+        "http://ingester:4317",
+        signoz_clickhouse_url="http://clickhouse:8123",
+    )
+    client = make_client(with_key)
+    assert isinstance(client, SigNozClient)
+    client.close()
+
+
+def test_clickhouse_is_only_a_no_secret_fallback() -> None:
+    no_key = WatcherConfig(
+        "http://signoz",
+        "",
+        30,
+        3,
+        0.01,
+        5,
+        3600,
+        60,
+        "http://ingester:4317",
+        signoz_clickhouse_url="http://clickhouse:8123",
+    )
+    client = make_client(no_key)
+    assert isinstance(client, ClickHouseClient)
+    client.close()
+
+
+def test_runaway_loop_signal_carries_repeated_state_reason() -> None:
+    emitter = RecordingEmitter()
+    watcher = LoopWatcher(FakeClient(cost=0.001), _config(), emitter, clock=lambda: 100.0)
+    watcher.poll_once()
+    loops = [s for s in emitter.signals if s.signal == "loop_detected"]
+    assert len(loops) == 1
+    assert loops[0].reason == "repeated_state"
+
+
+def test_healthy_converging_cycle_is_not_flagged() -> None:
+    # A generator/critic cycle whose state changes every iteration is legitimate
+    # refinement, not a runaway loop — it must not fire loop_detected.
+    emitter = RecordingEmitter()
+    watcher = LoopWatcher(
+        FakeClient(cost=0.001, progressing=True), _config(), emitter, clock=lambda: 100.0
+    )
+    watcher.poll_once()
+    assert not any(s.signal == "loop_detected" for s in emitter.signals)
 
 
 def test_watcher_does_not_emit_loop_for_acyclic_trace() -> None:
