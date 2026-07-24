@@ -63,7 +63,9 @@ def register_agent(kit, server, name: str) -> None:
         with kit.agent(name, conversation_id) as a_span:
             inherited = taint_from_baggage(NAMES)
             if inherited is not None:
-                mark_taint(a_span, Taint(inherited.category, inherited.origin, inherited.hops + 1), NAMES)
+                mark_taint(
+                    a_span, Taint(inherited.category, inherited.origin, inherited.hops + 1), NAMES
+                )
             kit.reasoning("received", hop=hops)
 
             context = ""

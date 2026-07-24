@@ -1,0 +1,110 @@
+# research-mesh example: SigNoz (Foundry-rendered) + five agents + the kit's detection
+# watcher and controller, all built on otel-agent-kit. Run from repo root:
+#   docker compose -f examples/research_mesh/compose.yaml up -d --build
+name: research-mesh
+
+include:
+  - path: ./signoz/pours/deployment/compose.yaml
+
+# Shared build (repo root context) + env for every agent service.
+x-agent: &agent
+  build:
+    context: ../..
+    dockerfile: examples/research_mesh/Dockerfile
+  environment: &agent-env
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
+    OTEL_TRACES_SAMPLER: parentbased_always_on
+    OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
+    OAK_LLM: ${OAK_LLM:-fake}
+    MESH_MODEL: ${MESH_MODEL:-gemini-2.5-flash}
+    GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    OAK_SEARCH: ${OAK_SEARCH:-fake}
+    TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+    OAK_CAPTURE_CONTENT: ${OAK_CAPTURE_CONTENT:-off}
+    MESH_LOOP_MODE: ${MESH_LOOP_MODE:-off}
+  networks:
+    - signoz-network
+
+services:
+  signoz-signoz-0:
+    environment:
+      SIGNOZ_TOKENIZER_JWT_SECRET: ${SIGNOZ_TOKENIZER_JWT_SECRET:-research-mesh-dev-secret}
+
+  ingester:
+    command:
+      - -c
+      - >-
+        /signoz-otel-collector migrate sync check &&
+        /signoz-otel-collector --config=/etc/otel-collector-config.yaml
+        --copy-path=/var/tmp/collector-config.yaml
+
+  planner:
+    <<: *agent
+    environment:
+      <<: *agent-env
+      OTEL_SERVICE_NAME: planner
+      RESEARCHER_A2A_URL: http://researcher:8000/a2a
+    ports:
+      - "8000:8000"
+
+  researcher:
+    <<: *agent
+    environment:
+      <<: *agent-env
+      OTEL_SERVICE_NAME: researcher
+      WRITER_A2A_URL: http://writer:8000/a2a
+
+  writer:
+    <<: *agent
+    environment:
+      <<: *agent-env
+      OTEL_SERVICE_NAME: writer
+      CRITIC_A2A_URL: http://critic:8000/a2a
+
+  critic:
+    <<: *agent
+    environment:
+      <<: *agent-env
+      OTEL_SERVICE_NAME: critic
+      WRITER_A2A_URL: http://writer:8000/a2a
+      ROUTER_A2A_URL: http://router:8000/a2a
+
+  router:
+    <<: *agent
+    environment:
+      <<: *agent-env
+      OTEL_SERVICE_NAME: router
+
+  # Detection watcher (ClickHouse fallback so no API key is needed for the example).
+  watcher:
+    build:
+      context: ../..
+      dockerfile: examples/research_mesh/Dockerfile
+    command: ["python", "-m", "otel_agent_kit.detection.loop_watcher"]
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
+      SIGNOZ_CLICKHOUSE_URL: http://signoz-telemetrystore-clickhouse-0-0:8123
+      OAK_POLL_INTERVAL_SEC: "5"
+      OAK_LOOP_WINDOW_SEC: "120"
+      OAK_LOOP_ITERATION_HARD_CAP: "8"
+    networks:
+      - signoz-network
+
+  # Alert webhook receiver → trips per-edge breaker / pauses agents.
+  controller:
+    build:
+      context: ../..
+      dockerfile: examples/research_mesh/Dockerfile
+    command: ["python", "-m", "otel_agent_kit.detection.controller"]
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
+      OAK_ENFORCE: ${OAK_ENFORCE:-auto}
+      PLANNER_CONTROL_URL: http://planner:8000
+      RESEARCHER_CONTROL_URL: http://researcher:8000
+      WRITER_CONTROL_URL: http://writer:8000
+      CRITIC_CONTROL_URL: http://critic:8000
+      ROUTER_CONTROL_URL: http://router:8000
+    ports:
+      - "8002:8000"
+    networks:
+      - signoz-network
