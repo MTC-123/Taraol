@@ -26,6 +26,11 @@ EXPERIMENT_RUN_ID = "experiment.run_id"
 EXPERIMENT_DESCRIPTION = "experiment.description"
 EXPERIMENT_AUTHOR = "experiment.author"
 EXPERIMENT_COMMIT = "experiment.commit"
+EXPERIMENT_PYTHON = "experiment.python"
+EXPERIMENT_KIT_VERSION = "experiment.kit_version"
+# On the once-per-variant experiment_run log record (not on spans).
+EXPERIMENT_STATUS = "experiment.status"  # "success" | "failed"
+EXPERIMENT_DURATION_MS = "experiment.duration_ms"
 
 # Content-bearing gen_ai keys, only set when capture_content is enabled (opt-in).
 # These are the current GenAI-semconv message keys (structured JSON message lists).
