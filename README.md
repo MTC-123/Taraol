@@ -64,10 +64,10 @@ answer quality. **SigNoz is the dashboard.**
 ```python
 from taraol import Experiment
 
-(Experiment("battery-report", author="Fraol")
+(Experiment("converge-vs-runaway", author="Fraol")
     .variant("baseline", config={"loop_mode": "off"})
     .variant("runaway",  config={"loop_mode": "storm"})
-    .run(workload))                                             # workload(variant) once per variant
+    .run(workload))                                             
 ```
 
 One `.run()` = one shared `run_id` (Experiment → Run → Variant → Trace); a variant that raises is
@@ -75,8 +75,8 @@ recorded `failed` and the run continues. Compare in the terminal (SigNoz Query A
 `SIGNOZ_API_KEY`, else ClickHouse fallback) or import the **experiment-comparison** dashboard:
 
 ```sh
-taraol experiment summary battery-report               # per-variant table + health
-taraol experiment diff <run1> <run2>                   # cost/latency/loops deltas
+taraol experiment summary converge-vs-runaway    # per-variant table + health
+taraol experiment diff <run1> <run2>             # cost/latency/loops deltas
 ```
 
 ```

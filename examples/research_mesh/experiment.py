@@ -10,7 +10,7 @@ rides the payload per conversation.
 Then compare — SigNoz is the dashboard (import the experiment-comparison dashboard), or
 from the terminal::
 
-    taraol experiment summary battery-report
+    taraol experiment summary converge-vs-runaway
 
 Needs OTEL_EXPORTER_OTLP_ENDPOINT pointing at the SigNoz collector (so the experiment_run
 records land) and the planner reachable at PLANNER_START_URL.
@@ -23,7 +23,7 @@ import httpx
 from taraol import Experiment, Variant, current_experiment, instrument
 
 PLANNER_START_URL = os.environ.get("PLANNER_START_URL", "http://localhost:8000/start")
-EXPERIMENT_ID = os.environ.get("AGENTLAB_EXPERIMENT_ID", "battery-report")
+EXPERIMENT_ID = os.environ.get("AGENTLAB_EXPERIMENT_ID", "converge-vs-runaway")
 USER_INPUT = os.environ.get("AGENTLAB_INPUT", "Summarize recent advances in solid-state batteries.")
 FIRE_TIMEOUT_SEC = float(os.environ.get("AGENTLAB_FIRE_TIMEOUT_SEC", "180"))
 
