@@ -13,7 +13,7 @@ from otel_agent_kit import semconv
 from otel_agent_kit.attributes import attrs
 from otel_agent_kit.breaker import edge_key, get_registry
 from otel_agent_kit.cost import add_to_request_cost
-from otel_agent_kit.facade import current_conversation_id
+from otel_agent_kit.facade import current_conversation_id, current_experiment
 from otel_agent_kit.propagation import inject_into
 from otel_agent_kit.taint import mark_taint, taint_from_baggage
 
@@ -62,6 +62,13 @@ class A2AClient:
         conversation_id = current_conversation_id()
         if conversation_id:
             attributes[semconv.GEN_AI_CONVERSATION_ID] = conversation_id
+        # Carry the AgentLab experiment onto the hop span so cross-process edges are
+        # groupable by variant/run in the comparison dashboard.
+        experiment = current_experiment()
+        if experiment is not None:
+            attributes[semconv.EXPERIMENT_ID] = experiment.id
+            attributes[semconv.EXPERIMENT_VARIANT] = experiment.variant
+            attributes[semconv.EXPERIMENT_RUN_ID] = experiment.run_id
         edge = edge_key(self.local_service_name, self.target_service_name)
         registry = get_registry()
         with self.tracer.start_as_current_span(

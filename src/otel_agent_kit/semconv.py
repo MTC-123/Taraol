@@ -18,6 +18,15 @@ CHAT = "chat"
 EXECUTE_TOOL = "execute_tool"
 INVOKE_AGENT = "invoke_agent"
 
+# Experiment tags (AgentLab) — group traces by variant to compare cost/latency/loops/
+# breaker trips across prompt / model / topology variants (operational experiments).
+EXPERIMENT_ID = "experiment.id"
+EXPERIMENT_VARIANT = "experiment.variant"
+EXPERIMENT_RUN_ID = "experiment.run_id"
+EXPERIMENT_DESCRIPTION = "experiment.description"
+EXPERIMENT_AUTHOR = "experiment.author"
+EXPERIMENT_COMMIT = "experiment.commit"
+
 # Content-bearing gen_ai keys, only set when capture_content is enabled (opt-in).
 # These are the current GenAI-semconv message keys (structured JSON message lists).
 GEN_AI_INPUT_MESSAGES = "gen_ai.input.messages"

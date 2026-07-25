@@ -5,9 +5,10 @@ spans, cost rollup, and the taint/breaker/provenance signals — without touchin
 OpenTelemetry object directly.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass, field
 
 from opentelemetry.trace import SpanKind, Tracer
 
@@ -19,6 +20,60 @@ from .events import reasoning_event
 from .taint import Taint, mark_taint, taint_from_baggage, taint_scope
 
 _conversation_id: ContextVar[str | None] = ContextVar("oak_conversation_id", default=None)
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentContext:
+    """The active AgentLab experiment — stamped on every span while it is in scope.
+
+    ``metadata`` is already keyed by ``experiment.*`` attribute names (description / author /
+    commit / python.version / …), so it merges straight onto a span.
+    """
+
+    id: str
+    variant: str
+    run_id: str
+    metadata: Mapping[str, str] = field(default_factory=dict)
+
+
+_experiment: ContextVar[ExperimentContext | None] = ContextVar("oak_experiment", default=None)
+
+
+def current_experiment() -> ExperimentContext | None:
+    return _experiment.get()
+
+
+@contextmanager
+def use_experiment(ctx: ExperimentContext) -> Iterator[None]:
+    """Make ``ctx`` the active experiment for the duration of the block (spans get tagged)."""
+
+    token = _experiment.set(ctx)
+    try:
+        yield
+    finally:
+        _experiment.reset(token)
+
+
+def _experiment_tags(settings: Settings) -> dict[str, str]:
+    """Experiment attributes to stamp on a span: the active ContextVar wins, else Settings."""
+
+    ctx = _experiment.get()
+    if ctx is not None:
+        tags = {
+            semconv.EXPERIMENT_ID: ctx.id,
+            semconv.EXPERIMENT_VARIANT: ctx.variant,
+            semconv.EXPERIMENT_RUN_ID: ctx.run_id,
+        }
+        tags.update({k: v for k, v in ctx.metadata.items() if v})
+        return tags
+    tags = {}
+    if settings.experiment_id:
+        tags[semconv.EXPERIMENT_ID] = settings.experiment_id
+    if settings.experiment_variant:
+        tags[semconv.EXPERIMENT_VARIANT] = settings.experiment_variant
+    if settings.experiment_run_id:
+        tags[semconv.EXPERIMENT_RUN_ID] = settings.experiment_run_id
+    return tags
 
 # Process-default handle so the decorator API (@agent/@chat/@tool) works without
 # threading the Instrument through every call. Set by instrument().
@@ -139,6 +194,7 @@ class Instrument:
             }
             if conversation_id is not None:
                 attributes[semconv.GEN_AI_CONVERSATION_ID] = conversation_id
+            attributes.update(_experiment_tags(self.settings))
             with self.tracer.start_as_current_span(
                 f"invoke_agent {name}", kind=SpanKind.INTERNAL, attributes=attributes
             ) as span:
@@ -160,6 +216,7 @@ class Instrument:
         conversation_id = _conversation_id.get()
         if conversation_id is not None:
             attributes[semconv.GEN_AI_CONVERSATION_ID] = conversation_id
+        attributes.update(_experiment_tags(self.settings))
         with self.tracer.start_as_current_span(
             f"chat {model}", kind=SpanKind.CLIENT, attributes=attributes
         ) as span:
@@ -171,10 +228,12 @@ class Instrument:
 
     @contextmanager
     def tool(self, tool_name: str, *, arguments: str | None = None) -> Iterator[ToolSpan]:
+        attributes = {semconv.GEN_AI_OPERATION_NAME: semconv.EXECUTE_TOOL}
+        attributes.update(_experiment_tags(self.settings))
         with self.tracer.start_as_current_span(
             f"execute_tool {tool_name}",
             kind=SpanKind.INTERNAL,
-            attributes={semconv.GEN_AI_OPERATION_NAME: semconv.EXECUTE_TOOL},
+            attributes=attributes,
         ) as span:
             tool = ToolSpan(span, self.names, self.settings)
             if arguments is not None:

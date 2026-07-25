@@ -28,6 +28,11 @@ class Settings:
     # ever recorded. When on, captured text is truncated to content_max_chars per field.
     capture_content: bool = False
     content_max_chars: int = 12000
+    # AgentLab experiment tags. Default None: no experiment.* attribute is emitted unless an
+    # experiment is active (env below, or the Experiment builder / decorators at runtime).
+    experiment_id: str | None = None
+    experiment_variant: str | None = None
+    experiment_run_id: str | None = None
 
     @classmethod
     def from_env(cls, service_name: str | None = None, **overrides: object) -> "Settings":
@@ -49,6 +54,9 @@ class Settings:
             capture_content=_env_flag("OAK_CAPTURE_CONTENT")
             or _env_flag("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"),
             content_max_chars=int(os.environ.get("OAK_CONTENT_MAX_CHARS", "12000")),
+            experiment_id=os.environ.get("OAK_EXPERIMENT_ID") or None,
+            experiment_variant=os.environ.get("OAK_EXPERIMENT_VARIANT") or None,
+            experiment_run_id=os.environ.get("OAK_EXPERIMENT_RUN_ID") or None,
         )
         # Keyword overrides win over environment.
         clean = {k: v for k, v in overrides.items() if k != "service_name" and v is not None}
