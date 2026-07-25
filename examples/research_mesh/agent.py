@@ -7,6 +7,7 @@ captured on spans only when OAK_CAPTURE_CONTENT=on. Loops trip the kit's detecti
 watcher + per-edge breaker exactly as the library intends.
 """
 
+import contextlib
 import hashlib
 import logging
 import os
@@ -16,7 +17,7 @@ from uuid import uuid4
 
 from opentelemetry import trace
 
-from otel_agent_kit import instrument, llm
+from otel_agent_kit import ExperimentContext, instrument, llm, use_experiment
 from otel_agent_kit.attributes import attrs
 from otel_agent_kit.guardrail import INPUT, OUTPUT, scan
 from otel_agent_kit.integrations.a2a import A2AClient, A2AError, EdgeBrokenError, create_app, run
@@ -60,7 +61,22 @@ def register_agent(kit, server, name: str) -> None:
         user_input = str(payload.get("user_input") or "")
         upstream = str(payload.get("upstream_output") or "")  # A's output → B's input
 
-        with kit.agent(name, conversation_id) as a_span:
+        # AgentLab: an experiment run threads its id/variant/run + a per-conversation loop
+        # mode through the payload so every span + hop of this variant is tagged, and one
+        # stack can compare converging vs runaway without an env change or a redeploy.
+        experiment_id = payload.get("experiment_id")
+        experiment_variant = payload.get("experiment_variant")
+        experiment_run_id = payload.get("experiment_run_id")
+        loop_mode = payload.get("loop_mode")  # None → the MESH_LOOP_MODE env default
+        experiment = (
+            use_experiment(
+                ExperimentContext(experiment_id, experiment_variant, experiment_run_id)
+            )
+            if experiment_id and experiment_variant and experiment_run_id
+            else contextlib.nullcontext()
+        )
+
+        with experiment, kit.agent(name, conversation_id) as a_span:
             inherited = taint_from_baggage(NAMES)
             if inherited is not None:
                 mark_taint(
@@ -108,8 +124,8 @@ def register_agent(kit, server, name: str) -> None:
 
             def _delegate() -> list[str]:
                 targets: list[str] = []
-                if hops < mesh.max_hops():
-                    for target in mesh.next_targets(name):
+                if hops < mesh.max_hops(loop_mode):
+                    for target in mesh.next_targets(name, loop_mode):
                         client = A2AClient(name, target)
                         try:
                             client.call(
@@ -119,6 +135,10 @@ def register_agent(kit, server, name: str) -> None:
                                     "hops": hops + 1,
                                     "user_input": user_input,
                                     "upstream_output": result.text,
+                                    "experiment_id": experiment_id,
+                                    "experiment_variant": experiment_variant,
+                                    "experiment_run_id": experiment_run_id,
+                                    "loop_mode": loop_mode,
                                 },
                                 mesh.target_url(target),
                             )
