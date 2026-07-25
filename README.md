@@ -123,11 +123,53 @@ The `[detection]` extra ships a **watcher** (reads SigNoz, flags runaway loops /
 / injection blast-radius / unhealthy edges) and a **controller** (alert webhook -> pause agent or
 trip a per-edge breaker -> trace-correlated audit).
 
+## AgentLab — compare operational behavior
+
+Which prompt, model, or multi-agent workflow is cheaper, faster, and *safer to run*? AgentLab
+tags every span + signal of a run with `experiment.id` / `experiment.variant` /
+`experiment.run_id`, fires the same workload once per variant, and compares them on real
+operational telemetry — cost, latency, tokens, **runaway loops, breaker trips, and failures** —
+not answer quality. **SigNoz is the dashboard.**
+
+```python
+from otel_agent_kit import Experiment
+
+(Experiment("battery-report", description="Gemini prompt A/B", author="Fraol")
+    .variant("baseline", config={"loop_mode": "off"})
+    .variant("runaway",  config={"loop_mode": "storm"})   # or .compare(baseline, runaway)
+    .run(workload))                     # workload(variant) fires once per variant
+```
+
+One `.run()` = one **run_id** shared across its variants (Experiment → Run → Variant → Trace), so
+repeated runs stay distinct. A variant that raises is recorded `status=failed` and the run keeps
+going. Compare from the terminal — the CLI uses the SigNoz Query API when `SIGNOZ_API_KEY` is set,
+else the ClickHouse fallback (same selection as the watcher):
+
+```sh
+otel-agent-kit experiment summary battery-report        # per-variant table + Operational Health
+otel-agent-kit experiment diff <run1> <run2>            # cost/latency/loops/breaker deltas
+```
+
+```
+variant              cost$   tokens  agents   avg ms  loops  breakers  fails  health
+baseline            0.0120     1200       5     1800      0         0      0    99.6
+runaway             0.0480     4800       5     5200      6         2      1    29.0
+Highest Operational Health: baseline   (tune HealthScore to what you optimize)
+```
+
+`HealthScore` is pluggable (`100 − 10·loops − 5·breaker − 0.2·latency_s − 0.1·cost`, weights
+overridable) and the "highest health" line is a factual read, not a universal winner. Import the
+bundled **experiment-comparison** dashboard to see the same split by `experiment.variant` — widen
+the time range to watch regression across runs. See
+[`examples/research_mesh/experiment.py`](examples/research_mesh/experiment.py) for a runnable
+baseline-vs-runaway on the 5-agent stack.
+
 ## Bundled SigNoz assets
 
 ```python
 from otel_agent_kit import assets
-assets.dump_dashboards("./out")     # cost-per-agent / cost-per-edge / conversation-budget
+assets.dump_dashboards("./out")     # cost-per-agent / cost-per-edge / conversation-budget /
+                                    # experiment-comparison
 assets.terraform_module_path()      # reusable alert-rule Terraform module
 ```
 Or: `otel-agent-kit dump-dashboards ./out`.

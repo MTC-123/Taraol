@@ -8,7 +8,8 @@ kit is the product; `examples/research_mesh/` is a reference app built on it.
 ## Layout
 - `src/otel_agent_kit/` — the package. Core (flat): `setup`, `facade`, `config`, `semconv`,
   `attributes`, `cost`, `propagation`, `events`, `capture`, `replay`, `cycle`, `breaker`,
-  `taint`, `provenance`, `guardrail`, `quality`, `llm`, `assets`, `cli`.
+  `taint`, `provenance`, `guardrail`, `quality`, `llm`, `assets`, `cli`, `experiments`
+  (AgentLab builder/decorators), `experiment_report` (summary/diff read path, lazy `[detection]`).
   Optional subpackages (extras): `integrations/a2a` `[a2a]`, `detection/` `[detection]`,
   `mcp/` `[mcp]`, `tools/search.py` `[search]`. Bundled assets in `data/`.
 - `examples/research_mesh/` — a 5-agent app + its SigNoz Foundry deploy + `compose.yaml`.
