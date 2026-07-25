@@ -49,6 +49,23 @@ def main() -> None:
         help="per-agent step chain (input/output/tools) instead of the summary",
     )
 
+    experiment = commands.add_parser(
+        "experiment", help="AgentLab: compare experiment variants from SigNoz telemetry"
+    )
+    exp_sub = experiment.add_subparsers(dest="exp_command", required=True)
+    exp_summary = exp_sub.add_parser("summary", help="per-variant cost/latency/loops/breakers/fails")
+    exp_summary.add_argument("experiment_id")
+    exp_summary.add_argument("--run", dest="run_id", default=None, help="limit to one run_id")
+    exp_summary.add_argument(
+        "--since", type=int, default=60, help="lookback window in minutes (default 60)"
+    )
+    exp_diff = exp_sub.add_parser("diff", help="compare two runs (cost/latency/loops deltas)")
+    exp_diff.add_argument("run1")
+    exp_diff.add_argument("run2")
+    exp_diff.add_argument(
+        "--since", type=int, default=60, help="lookback window in minutes (default 60)"
+    )
+
     args = parser.parse_args()
     if args.command == "signoz":
         _signoz(args.action)
@@ -75,3 +92,16 @@ def main() -> None:
                 print(format_explanation(facts))
         finally:
             client.close()
+    elif args.command == "experiment":
+        # Lazy import: the [detection] extra (httpx + SigNoz/ClickHouse client) is only
+        # needed for the summary/diff read path.
+        from . import experiment_report
+
+        if args.exp_command == "summary":
+            print(
+                experiment_report.summarize(
+                    args.experiment_id, run_id=args.run_id, since_sec=args.since * 60
+                )
+            )
+        elif args.exp_command == "diff":
+            print(experiment_report.diff(args.run1, args.run2, since_sec=args.since * 60))

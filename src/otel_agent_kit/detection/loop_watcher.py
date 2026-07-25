@@ -72,6 +72,10 @@ def _first_attr(spans: list[dict[str, Any]], key: str) -> str | None:
     return None
 
 
+def _experiment_id(spans: list[dict[str, Any]]) -> str | None:
+    return _first_attr(spans, "experiment.id")
+
+
 def _experiment_variant(spans: list[dict[str, Any]]) -> str | None:
     return _first_attr(spans, "experiment.variant")
 
@@ -182,6 +186,7 @@ class LoopWatcher:
                     trace_id,
                     datetime.now(UTC),
                     reason=reason,
+                    experiment_id=_experiment_id(spans),
                     experiment_variant=_experiment_variant(spans),
                     experiment_run_id=_experiment_run_id(spans),
                 ),
@@ -207,6 +212,7 @@ class LoopWatcher:
                         datetime.now(UTC),
                         # A hot edge (hop volume over the breaker cap) is a runaway pattern.
                         breaker_reason="loop",
+                        experiment_id=_experiment_id(spans) if spans else None,
                         experiment_variant=_experiment_variant(spans) if spans else None,
                         experiment_run_id=_experiment_run_id(spans) if spans else None,
                     ),

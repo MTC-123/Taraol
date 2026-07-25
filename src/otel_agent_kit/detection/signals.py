@@ -33,9 +33,11 @@ class Signal:
     blast: str | None = None
     # Why a loop was classified runaway: "repeated_state" | "iteration_cap" | "cost_budget".
     reason: str | None = None
-    # AgentLab: which experiment variant/run produced this signal, and (for a breaker
+    # AgentLab: which experiment / variant / run produced this signal, and (for a breaker
     # trip) why the edge was cut — "loop" | "budget" | "timeout" | "manual". Content-free;
-    # asdict() below emits them as experiment_variant / experiment_run_id / breaker_reason.
+    # asdict() below emits them as experiment_id / experiment_variant / experiment_run_id /
+    # breaker_reason.
+    experiment_id: str | None = None
     experiment_variant: str | None = None
     experiment_run_id: str | None = None
     breaker_reason: str | None = None

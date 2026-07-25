@@ -1,0 +1,114 @@
+{
+  "title": "AgentLab — Experiment Comparison",
+  "description": "Compare operational behavior across experiment variants: cost, tokens, latency, runaway loops, breaker trips, and failures — split by experiment.variant. Set the time range to one run to compare a single run; widen it to see regression across runs. SigNoz is the dashboard.",
+  "tags": ["otel-agent-kit", "agentlab", "experiment"],
+  "version": "v5",
+  "uploadedGrafana": false,
+  "variables": {},
+  "panelMap": {},
+  "layout": [
+    {"i": "exp-latency", "x": 0, "y": 0, "w": 12, "h": 7},
+    {"i": "exp-cost", "x": 0, "y": 7, "w": 6, "h": 7},
+    {"i": "exp-tokens", "x": 6, "y": 7, "w": 6, "h": 7},
+    {"i": "exp-loops", "x": 0, "y": 14, "w": 4, "h": 7},
+    {"i": "exp-breakers", "x": 4, "y": 14, "w": 4, "h": 7},
+    {"i": "exp-failures", "x": 8, "y": 14, "w": 4, "h": 7}
+  ],
+  "widgets": [
+    {
+      "id": "exp-latency",
+      "title": "P95 agent latency by variant",
+      "description": "P95 duration of invoke_agent spans, per variant, over time. A slower variant stands out here.",
+      "panelTypes": "graph",
+      "timePreferance": "GLOBAL_TIME",
+      "yAxisUnit": "ns",
+      "query": {"queryType": "builder", "builder": {"queryData": [
+        {"queryName": "A", "dataSource": "traces", "expression": "A", "stepInterval": 30,
+         "aggregations": [{"expression": "p95(duration_nano)"}],
+         "filter": {"expression": "gen_ai.operation.name = 'invoke_agent' AND experiment.variant EXISTS"},
+         "groupBy": [{"key": "experiment.variant", "type": "tag"}],
+         "legend": "P95 {{experiment.variant}}"}
+      ], "queryFormulas": []}}
+    },
+    {
+      "id": "exp-cost",
+      "title": "Direct LLM cost by variant (USD)",
+      "description": "Sum of agentmesh.cost.direct_usd across chat spans, per variant.",
+      "panelTypes": "table",
+      "timePreferance": "GLOBAL_TIME",
+      "yAxisUnit": "usd",
+      "columnUnits": {"A": "usd"},
+      "thresholds": [{"value": 0.01, "color": "yellow"}, {"value": 0.02, "color": "red"}],
+      "query": {"queryType": "builder", "builder": {"queryData": [
+        {"queryName": "A", "dataSource": "traces", "expression": "A", "stepInterval": 30,
+         "aggregations": [{"expression": "sum(agentmesh.cost.direct_usd)"}],
+         "filter": {"expression": "gen_ai.operation.name = 'chat' AND agentmesh.cost.direct_usd EXISTS AND experiment.variant EXISTS"},
+         "groupBy": [{"key": "experiment.variant", "type": "tag"}],
+         "legend": "{{experiment.variant}}"}
+      ], "queryFormulas": []}}
+    },
+    {
+      "id": "exp-tokens",
+      "title": "Output tokens by variant",
+      "description": "Sum of gen_ai.usage.output_tokens across chat spans, per variant.",
+      "panelTypes": "table",
+      "timePreferance": "GLOBAL_TIME",
+      "yAxisUnit": "short",
+      "query": {"queryType": "builder", "builder": {"queryData": [
+        {"queryName": "A", "dataSource": "traces", "expression": "A", "stepInterval": 30,
+         "aggregations": [{"expression": "sum(gen_ai.usage.output_tokens)"}],
+         "filter": {"expression": "gen_ai.operation.name = 'chat' AND experiment.variant EXISTS"},
+         "groupBy": [{"key": "experiment.variant", "type": "tag"}],
+         "legend": "{{experiment.variant}}"}
+      ], "queryFormulas": []}}
+    },
+    {
+      "id": "exp-loops",
+      "title": "Runaway loops by variant",
+      "description": "loop_detected signals from the watcher, per variant. Higher = more runaway behavior.",
+      "panelTypes": "table",
+      "timePreferance": "GLOBAL_TIME",
+      "yAxisUnit": "short",
+      "thresholds": [{"value": 1, "color": "red"}],
+      "query": {"queryType": "builder", "builder": {"queryData": [
+        {"queryName": "A", "dataSource": "logs", "expression": "A", "stepInterval": 30,
+         "aggregations": [{"expression": "count()"}],
+         "filter": {"expression": "body = 'loop_detected' AND experiment_variant EXISTS"},
+         "groupBy": [{"key": "experiment_variant", "type": "tag"}],
+         "legend": "{{experiment_variant}}"}
+      ], "queryFormulas": []}}
+    },
+    {
+      "id": "exp-breakers",
+      "title": "Breaker trips by variant",
+      "description": "edge_unhealthy signals (a hot/runaway edge tripping the breaker), per variant.",
+      "panelTypes": "table",
+      "timePreferance": "GLOBAL_TIME",
+      "yAxisUnit": "short",
+      "thresholds": [{"value": 1, "color": "red"}],
+      "query": {"queryType": "builder", "builder": {"queryData": [
+        {"queryName": "A", "dataSource": "logs", "expression": "A", "stepInterval": 30,
+         "aggregations": [{"expression": "count()"}],
+         "filter": {"expression": "body = 'edge_unhealthy' AND experiment_variant EXISTS"},
+         "groupBy": [{"key": "experiment_variant", "type": "tag"}],
+         "legend": "{{experiment_variant}}"}
+      ], "queryFormulas": []}}
+    },
+    {
+      "id": "exp-failures",
+      "title": "Failures by variant",
+      "description": "experiment_run records with status=failed, per variant. A variant that throws shows up here instead of aborting the run.",
+      "panelTypes": "table",
+      "timePreferance": "GLOBAL_TIME",
+      "yAxisUnit": "short",
+      "thresholds": [{"value": 1, "color": "red"}],
+      "query": {"queryType": "builder", "builder": {"queryData": [
+        {"queryName": "A", "dataSource": "logs", "expression": "A", "stepInterval": 30,
+         "aggregations": [{"expression": "count()"}],
+         "filter": {"expression": "body = 'experiment_run' AND experiment.status = 'failed'"},
+         "groupBy": [{"key": "experiment.variant", "type": "tag"}],
+         "legend": "{{experiment.variant}}"}
+      ], "queryFormulas": []}}
+    }
+  ]
+}

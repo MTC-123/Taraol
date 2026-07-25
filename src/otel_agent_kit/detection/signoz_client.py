@@ -1,6 +1,7 @@
 """Thin, read-only SigNoz v5 Query Builder client and reusable query shapes."""
 
 import json
+import re
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -21,6 +22,28 @@ class TimeRange:
 
 def _field(name: str, context: str = "span") -> dict[str, str]:
     return {"name": name, "fieldContext": context}
+
+
+def _escape(value: str) -> str:
+    return value.replace("'", "\\'")
+
+
+def _experiment_where(
+    experiment_id: str | None, run_id: str | None, *, id_key: str, run_key: str
+) -> list[str]:
+    clauses = []
+    if experiment_id:
+        clauses.append(f"{id_key} = '{_escape(experiment_id)}'")
+    if run_id:
+        clauses.append(f"{run_key} = '{_escape(run_id)}'")
+    return clauses
+
+
+def _extract_eq(expression: str, key: str) -> str | None:
+    """Pull ``key = '...'`` back out of a filter expression (for the ClickHouse fallback)."""
+
+    match = re.search(rf"(?<![\w.]){re.escape(key)}\s*=\s*'((?:[^'\\]|\\.)*)'", expression)
+    return match.group(1).replace("\\'", "'") if match else None
 
 
 def velocity_query() -> dict[str, Any]:
@@ -185,6 +208,126 @@ def audit_query(trace_id: str) -> dict[str, Any]:
     }
 
 
+# --- AgentLab summary/diff queries -------------------------------------------------
+#
+# One question each, grouped by variant, so the summary/diff CLI works on both the SigNoz
+# Query API (preferred) and the ClickHouse fallback (Community). Span metrics carry the dot
+# key experiment.variant; watcher-signal logs carry underscore experiment_variant; the
+# experiment_run logs carry dot experiment.variant + experiment.status.
+
+
+def experiment_span_metrics_query(
+    experiment_id: str | None = None, run_id: str | None = None
+) -> dict[str, Any]:
+    where = ["gen_ai.operation.name = 'chat'", "experiment.variant EXISTS"]
+    where += _experiment_where(
+        experiment_id, run_id, id_key="experiment.id", run_key="experiment.run_id"
+    )
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "experiment_span_metrics",
+            "signal": "traces",
+            "stepInterval": 30,
+            "aggregations": [
+                {"expression": "sum(agentmesh.cost.direct_usd)", "alias": "cost_usd"},
+                {"expression": "sum(gen_ai.usage.output_tokens)", "alias": "output_tokens"},
+                {"expression": "count()", "alias": "span_count"},
+            ],
+            "filter": {"expression": " AND ".join(where)},
+            "groupBy": [_field("experiment.variant")],
+            "disabled": False,
+        },
+    }
+
+
+def experiment_loop_count_query(
+    experiment_id: str | None = None, run_id: str | None = None
+) -> dict[str, Any]:
+    where = ["body = 'loop_detected'", "experiment_variant EXISTS"]
+    where += _experiment_where(
+        experiment_id, run_id, id_key="experiment_id", run_key="experiment_run_id"
+    )
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "experiment_loop_count",
+            "signal": "logs",
+            "stepInterval": 30,
+            "aggregations": [{"expression": "count()", "alias": "loops"}],
+            "filter": {"expression": " AND ".join(where)},
+            "groupBy": [_field("experiment_variant")],
+            "disabled": False,
+        },
+    }
+
+
+def experiment_breaker_count_query(
+    experiment_id: str | None = None, run_id: str | None = None
+) -> dict[str, Any]:
+    where = ["body = 'edge_unhealthy'", "experiment_variant EXISTS"]
+    where += _experiment_where(
+        experiment_id, run_id, id_key="experiment_id", run_key="experiment_run_id"
+    )
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "experiment_breaker_count",
+            "signal": "logs",
+            "stepInterval": 30,
+            "aggregations": [{"expression": "count()", "alias": "breaker_trips"}],
+            "filter": {"expression": " AND ".join(where)},
+            "groupBy": [_field("experiment_variant")],
+            "disabled": False,
+        },
+    }
+
+
+def experiment_run_count_query(
+    experiment_id: str | None = None, run_id: str | None = None
+) -> dict[str, Any]:
+    where = ["body = 'experiment_run'"]
+    where += _experiment_where(
+        experiment_id, run_id, id_key="experiment.id", run_key="experiment.run_id"
+    )
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "experiment_run_count",
+            "signal": "logs",
+            "stepInterval": 30,
+            "aggregations": [
+                {"expression": "count()", "alias": "runs"},
+                {"expression": "avg(experiment.duration_ms)", "alias": "avg_duration_ms"},
+            ],
+            "filter": {"expression": " AND ".join(where)},
+            "groupBy": [_field("experiment.variant")],
+            "disabled": False,
+        },
+    }
+
+
+def experiment_failure_count_query(
+    experiment_id: str | None = None, run_id: str | None = None
+) -> dict[str, Any]:
+    where = ["body = 'experiment_run'", "experiment.status = 'failed'"]
+    where += _experiment_where(
+        experiment_id, run_id, id_key="experiment.id", run_key="experiment.run_id"
+    )
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "experiment_failure_count",
+            "signal": "logs",
+            "stepInterval": 30,
+            "aggregations": [{"expression": "count()", "alias": "failures"}],
+            "filter": {"expression": " AND ".join(where)},
+            "groupBy": [_field("experiment.variant")],
+            "disabled": False,
+        },
+    }
+
+
 class SigNozClient:
     def __init__(self, url: str, api_key: str, *, client: httpx.Client | None = None) -> None:
         self.url = url.rstrip("/")
@@ -268,6 +411,13 @@ class ClickHouseClient:
     def close(self) -> None:
         if self._owns_client:
             self._client.close()
+
+    @staticmethod
+    def _filter_expr(spec: Mapping[str, Any]) -> str:
+        filt = spec.get("filter", {})
+        if isinstance(filt, Mapping) and isinstance(filt.get("expression"), str):
+            return filt["expression"]
+        return ""
 
     @staticmethod
     def _seconds(time_range: TimeRange) -> str:
@@ -400,4 +550,74 @@ class ClickHouseClient:
                 WHERE trace_id = '{escaped}' AND body = 'agent_paused'
                 ORDER BY timestamp
             """
+        if name == "experiment_span_metrics":
+            expr = self._filter_expr(spec)
+            extra = self._experiment_extra(
+                expr, attrs, id_key="experiment.id", run_key="experiment.run_id"
+            )
+            return f"""
+                SELECT {attrs}['experiment.variant'] AS `experiment.variant`,
+                       sumIf(attributes_number['agentmesh.cost.direct_usd'],
+                             {attrs}['gen_ai.operation.name'] = 'chat') AS cost_usd,
+                       sumIf(attributes_number['gen_ai.usage.output_tokens'],
+                             {attrs}['gen_ai.operation.name'] = 'chat') AS output_tokens,
+                       uniqExact(resources_string['service.name']) AS agent_count
+                FROM {self._TABLE}
+                WHERE {bounded} AND mapContains({attrs}, 'experiment.variant'){extra}
+                GROUP BY `experiment.variant`
+            """
+        if name in ("experiment_loop_count", "experiment_breaker_count"):
+            body = "loop_detected" if name == "experiment_loop_count" else "edge_unhealthy"
+            alias = "loops" if name == "experiment_loop_count" else "breaker_trips"
+            expr = self._filter_expr(spec)
+            extra = self._experiment_extra(
+                expr, "attributes_string", id_key="experiment_id", run_key="experiment_run_id"
+            )
+            return f"""
+                SELECT attributes_string['experiment_variant'] AS `experiment_variant`,
+                       count() AS {alias}
+                FROM signoz_logs.distributed_logs_v2
+                WHERE {bounded} AND body = '{body}'
+                  AND mapContains(attributes_string, 'experiment_variant'){extra}
+                GROUP BY `experiment_variant`
+            """
+        if name == "experiment_run_count":
+            expr = self._filter_expr(spec)
+            extra = self._experiment_extra(
+                expr, "attributes_string", id_key="experiment.id", run_key="experiment.run_id"
+            )
+            return f"""
+                SELECT attributes_string['experiment.variant'] AS `experiment.variant`,
+                       count() AS runs,
+                       avg(attributes_number['experiment.duration_ms']) AS avg_duration_ms
+                FROM signoz_logs.distributed_logs_v2
+                WHERE {bounded} AND body = 'experiment_run'{extra}
+                GROUP BY `experiment.variant`
+            """
+        if name == "experiment_failure_count":
+            expr = self._filter_expr(spec)
+            extra = self._experiment_extra(
+                expr, "attributes_string", id_key="experiment.id", run_key="experiment.run_id"
+            )
+            return f"""
+                SELECT attributes_string['experiment.variant'] AS `experiment.variant`,
+                       count() AS failures
+                FROM signoz_logs.distributed_logs_v2
+                WHERE {bounded} AND body = 'experiment_run'
+                  AND attributes_string['experiment.status'] = 'failed'{extra}
+                GROUP BY `experiment.variant`
+            """
         raise SigNozQueryError(f"unsupported ClickHouse watcher query: {name}")
+
+    @staticmethod
+    def _experiment_extra(expression: str, attrs_map: str, *, id_key: str, run_key: str) -> str:
+        """Rebuild the optional experiment.id / run_id filter as a ClickHouse map lookup."""
+
+        extra = ""
+        experiment_id = _extract_eq(expression, id_key)
+        run_id = _extract_eq(expression, run_key)
+        if experiment_id:
+            extra += f" AND {attrs_map}['{id_key}'] = '{_escape(experiment_id)}'"
+        if run_id:
+            extra += f" AND {attrs_map}['{run_key}'] = '{_escape(run_id)}'"
+        return extra
