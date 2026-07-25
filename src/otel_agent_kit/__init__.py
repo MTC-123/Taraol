@@ -18,6 +18,7 @@ from .attributes import AttrNames, attrs
 from .config import Settings
 from .cost import CostAccumulator, CostModel, add_to_request_cost, request_cost_scope
 from .cycle import Cycle, find_cycles, find_directed_cycles
+from .decorators import agent, chat, record_chat, record_chat_content, tool
 from .facade import ChatSpan, Instrument, ToolSpan, current_conversation_id
 from .propagation import extract_from, inject_into
 from .provenance import origin_of_bad_output
@@ -50,6 +51,11 @@ __all__ = [
     "Step",
     "ToolCall",
     "current_conversation_id",
+    "agent",
+    "chat",
+    "tool",
+    "record_chat",
+    "record_chat_content",
     "inject_into",
     "extract_from",
     "assets",

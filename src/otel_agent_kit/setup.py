@@ -113,4 +113,9 @@ def instrument(
         _install_provider(resolved)
         _PROVIDER_INSTALLED = True
     tracer = trace.get_tracer(resolved.service_name)
-    return Instrument(tracer, resolved, _resolve_cost(cost_model, resolved))
+    handle = Instrument(tracer, resolved, _resolve_cost(cost_model, resolved))
+    # Make this the process default so the @agent/@chat/@tool decorators can find it.
+    from .facade import set_default_instrument
+
+    set_default_instrument(handle)
+    return handle

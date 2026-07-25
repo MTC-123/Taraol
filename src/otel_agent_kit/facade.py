@@ -20,9 +20,24 @@ from .taint import Taint, mark_taint, taint_from_baggage, taint_scope
 
 _conversation_id: ContextVar[str | None] = ContextVar("oak_conversation_id", default=None)
 
+# Process-default handle so the decorator API (@agent/@chat/@tool) works without
+# threading the Instrument through every call. Set by instrument().
+_default_instrument: "Instrument | None" = None
+
 
 def current_conversation_id() -> str | None:
     return _conversation_id.get()
+
+
+def set_default_instrument(instrument: "Instrument") -> None:
+    global _default_instrument
+    _default_instrument = instrument
+
+
+def get_default_instrument() -> "Instrument":
+    if _default_instrument is None:
+        raise RuntimeError("call instrument(...) before using the @agent/@chat/@tool decorators")
+    return _default_instrument
 
 
 class ChatSpan:

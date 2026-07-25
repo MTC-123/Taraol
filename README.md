@@ -47,6 +47,29 @@ with kit.agent("planner", conversation_id) as _a, kit.chat("gemini-2.5-flash") a
 exporter, W3C trace-context + baggage propagation, and the bundled price table. Agents that
 propagate `traceparent` render as a live **Service Map** in SigNoz — no custom UI.
 
+### …or one decorator
+
+Prefer decorators? They wrap the same context managers — no subclassing, drop them on your
+existing functions:
+
+```python
+from otel_agent_kit import instrument, agent, chat, tool, record_chat
+instrument("planner")
+
+@tool                       # execute_tool span (str return captured as the result)
+def search(query): ...
+
+@chat("gpt-4o")             # chat span; record usage/content from inside
+def think(prompt):
+    r = client.chat.completions.create(...)
+    record_chat(input_tokens=r.usage.prompt_tokens, output_tokens=r.usage.completion_tokens)
+    return r.choices[0].message.content
+
+@agent(name="planner")      # invoke_agent span around the step
+def plan(task):
+    return think(search(task))
+```
+
 ## LangSmith-style step inspection (opt-in)
 
 Off by default — **no prompt/output/tool text is ever captured**. Turn it on with
