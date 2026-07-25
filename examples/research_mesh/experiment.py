@@ -24,9 +24,7 @@ from otel_agent_kit import Experiment, Variant, current_experiment, instrument
 
 PLANNER_START_URL = os.environ.get("PLANNER_START_URL", "http://localhost:8000/start")
 EXPERIMENT_ID = os.environ.get("AGENTLAB_EXPERIMENT_ID", "battery-report")
-USER_INPUT = os.environ.get(
-    "AGENTLAB_INPUT", "Summarize recent advances in solid-state batteries."
-)
+USER_INPUT = os.environ.get("AGENTLAB_INPUT", "Summarize recent advances in solid-state batteries.")
 FIRE_TIMEOUT_SEC = float(os.environ.get("AGENTLAB_FIRE_TIMEOUT_SEC", "180"))
 
 

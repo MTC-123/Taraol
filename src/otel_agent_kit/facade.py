@@ -75,6 +75,7 @@ def _experiment_tags(settings: Settings) -> dict[str, str]:
         tags[semconv.EXPERIMENT_RUN_ID] = settings.experiment_run_id
     return tags
 
+
 # Process-default handle so the decorator API (@agent/@chat/@tool) works without
 # threading the Instrument through every call. Set by instrument().
 _default_instrument: "Instrument | None" = None

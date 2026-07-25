@@ -69,9 +69,7 @@ def register_agent(kit, server, name: str) -> None:
         experiment_run_id = payload.get("experiment_run_id")
         loop_mode = payload.get("loop_mode")  # None → the MESH_LOOP_MODE env default
         experiment = (
-            use_experiment(
-                ExperimentContext(experiment_id, experiment_variant, experiment_run_id)
-            )
+            use_experiment(ExperimentContext(experiment_id, experiment_variant, experiment_run_id))
             if experiment_id and experiment_variant and experiment_run_id
             else contextlib.nullcontext()
         )

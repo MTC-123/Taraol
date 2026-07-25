@@ -199,7 +199,9 @@ class LoopWatcher:
                 # query for an unhealthy edge (rare) whose trace we have not seen.
                 spans = seen_traces.get(trace_id) if trace_id else None
                 if spans is None and trace_id:
-                    spans = seen_traces.setdefault(trace_id, self.client.get_trace(trace_id, window))
+                    spans = seen_traces.setdefault(
+                        trace_id, self.client.get_trace(trace_id, window)
+                    )
                 self._emit(
                     (edge_label, "edge_unhealthy"),
                     Signal(

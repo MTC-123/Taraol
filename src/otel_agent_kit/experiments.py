@@ -258,9 +258,7 @@ class Experiment:
                 except Exception as exc:  # noqa: BLE001 — capture, don't abort the run
                     status, error = "failed", f"{type(exc).__name__}: {exc}"
             duration_ms = round((time.monotonic() - started) * 1000, 1)
-            _emit_experiment_run(
-                self.id, variant, rid, status, duration_ms, error, self.metadata
-            )
+            _emit_experiment_run(self.id, variant, rid, status, duration_ms, error, self.metadata)
             results.append(VariantResult(variant.name, status, duration_ms, error))
         return RunResult(self.id, rid, results)
 
@@ -297,9 +295,7 @@ def experiment(
     return deco
 
 
-def variant(
-    name: str, *, experiment_id: str | None = None, run_id: str | None = None
-) -> Callable:
+def variant(name: str, *, experiment_id: str | None = None, run_id: str | None = None) -> Callable:
     """Decorator form: set the variant, inheriting id/run from the active experiment context."""
 
     def deco(f: Callable) -> Callable:

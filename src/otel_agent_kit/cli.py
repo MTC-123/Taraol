@@ -53,7 +53,9 @@ def main() -> None:
         "experiment", help="AgentLab: compare experiment variants from SigNoz telemetry"
     )
     exp_sub = experiment.add_subparsers(dest="exp_command", required=True)
-    exp_summary = exp_sub.add_parser("summary", help="per-variant cost/latency/loops/breakers/fails")
+    exp_summary = exp_sub.add_parser(
+        "summary", help="per-variant cost/latency/loops/breakers/fails"
+    )
     exp_summary.add_argument("experiment_id")
     exp_summary.add_argument("--run", dest="run_id", default=None, help="limit to one run_id")
     exp_summary.add_argument(

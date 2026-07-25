@@ -178,7 +178,9 @@ def _pct(a: float, b: float) -> str:
 
 def format_diff(run1: str, run2: str, a: VariantMetrics, b: VariantMetrics) -> str:
     lines = [f"AgentLab diff - run {run1[:12]} -> run {run2[:12]}", ""]
-    lines.append(f"{'Cost $':<16}{a.cost_usd:>12.4f} -> {b.cost_usd:<12.4f}{_pct(a.cost_usd, b.cost_usd):>8}")
+    lines.append(
+        f"{'Cost $':<16}{a.cost_usd:>12.4f} -> {b.cost_usd:<12.4f}{_pct(a.cost_usd, b.cost_usd):>8}"
+    )
     lines.append(
         f"{'Avg latency ms':<16}{a.avg_latency_ms:>12.0f} -> {b.avg_latency_ms:<12.0f}"
         f"{_pct(a.avg_latency_ms, b.avg_latency_ms):>8}"

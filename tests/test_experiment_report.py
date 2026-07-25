@@ -13,8 +13,18 @@ from otel_agent_kit.experiments import HealthScore
 
 _ROWS = {
     "experiment_span_metrics": [
-        {"experiment.variant": "baseline", "cost_usd": 0.012, "output_tokens": 1200, "agent_count": 5},
-        {"experiment.variant": "runaway", "cost_usd": 0.048, "output_tokens": 4800, "agent_count": 5},
+        {
+            "experiment.variant": "baseline",
+            "cost_usd": 0.012,
+            "output_tokens": 1200,
+            "agent_count": 5,
+        },
+        {
+            "experiment.variant": "runaway",
+            "cost_usd": 0.048,
+            "output_tokens": 4800,
+            "agent_count": 5,
+        },
     ],
     "experiment_loop_count": [{"experiment_variant": "runaway", "loops": 6}],
     "experiment_breaker_count": [{"experiment_variant": "runaway", "breaker_trips": 2}],
@@ -69,7 +79,13 @@ def test_signal_without_experiment_omits_keys() -> None:
 
 def test_watcher_reads_experiment_tags_from_spans() -> None:
     spans = [
-        {"attributes": {"experiment.id": "e", "experiment.variant": "runaway", "experiment.run_id": "r"}}
+        {
+            "attributes": {
+                "experiment.id": "e",
+                "experiment.variant": "runaway",
+                "experiment.run_id": "r",
+            }
+        }
     ]
     assert lw._experiment_id(spans) == "e"
     assert lw._experiment_variant(spans) == "runaway"
