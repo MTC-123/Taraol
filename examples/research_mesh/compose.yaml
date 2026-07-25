@@ -108,3 +108,20 @@ services:
       - "8002:8000"
     networks:
       - signoz-network
+
+  # Official SigNoz MCP server — powers `otel-agent-kit explain` (grounded post-mortems).
+  # Reachable from the host at http://localhost:8003/mcp (set SIGNOZ_MCP_URL to that).
+  signoz-mcp:
+    image: signoz/signoz-mcp-server:v0.1.0
+    depends_on:
+      - signoz-signoz-0
+    environment:
+      TRANSPORT_MODE: http
+      MCP_SERVER_PORT: 8000
+      SIGNOZ_URL: http://signoz-signoz-0:8080
+      SIGNOZ_API_KEY: ${SIGNOZ_API_KEY:-}
+      LOG_LEVEL: info
+    ports:
+      - "${SIGNOZ_MCP_PORT:-8003}:8000"
+    networks:
+      - signoz-network

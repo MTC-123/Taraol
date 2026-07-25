@@ -342,7 +342,7 @@ spec:
         SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN: tcp://signoz-telemetrystore-clickhouse-0-0:9000
         SIGNOZ_TELEMETRYSTORE_PROVIDER: clickhouse
       image: signoz/signoz:v0.128.0
-      version: v0.128.0
+      version: latest
     status:
       addresses:
         apiserver:
@@ -376,14 +376,14 @@ spec:
                 force_sync: false
                 snapshot_distance: 100000
                 snapshots_to_keep: 3
-              log_storage_path: /var/lib/clickhouse/coordination/log
+              log_storage_path: /var/lib/clickhouse-keeper/coordination/log
               raft_configuration:
                 server:
                 - hostname: signoz-telemetrykeeper-clickhousekeeper-0
                   port: 9234
                   id: 0
               server_id: 0
-              snapshot_storage_path: /var/lib/clickhouse/coordination/snapshots
+              snapshot_storage_path: /var/lib/clickhouse-keeper/coordination/snapshots
               tcp_port: 9181
       enabled: true
       image: clickhouse/clickhouse-keeper:25.12.5
@@ -410,14 +410,14 @@ spec:
                 force_sync: false
                 snapshot_distance: 100000
                 snapshots_to_keep: 3
-              log_storage_path: /var/lib/clickhouse/coordination/log
+              log_storage_path: /var/lib/clickhouse-keeper/coordination/log
               raft_configuration:
                 server:
                 - hostname: signoz-telemetrykeeper-clickhousekeeper-0
                   port: 9234
                   id: 0
               server_id: 0
-              snapshot_storage_path: /var/lib/clickhouse/coordination/snapshots
+              snapshot_storage_path: /var/lib/clickhouse-keeper/coordination/snapshots
               tcp_port: 9181
   telemetrystore:
     kind: clickhouse
@@ -465,7 +465,7 @@ spec:
                         result_rows: 0
             user_directories:
               users_xml:
-                path: users.xml
+                path: config-0-0.yaml
             remote_servers:
               cluster:
                 shard:
@@ -511,7 +511,7 @@ spec:
             zookeeper_log:
                 ttl: "event_date + INTERVAL 1 DAY DELETE"
             tcp_port: 9000
-            user_defined_executable_functions_config: '*function.yaml'
+            user_defined_executable_functions_config: '*functions.yaml'
             user_scripts_path: /var/lib/clickhouse/user_scripts/
             users:
                 default:
@@ -532,7 +532,7 @@ spec:
                   - name: counts
                     type: Array(Float64)
                   - name: quantile
-                    type: Array(Float64)
+                    type: Float64
               command: ./histogramQuantile
               format: CSV
               name: histogramQuantile
@@ -585,7 +585,7 @@ spec:
                         result_rows: 0
             user_directories:
               users_xml:
-                path: users.xml
+                path: config-0-0.yaml
             remote_servers:
               cluster:
                 shard:
@@ -631,7 +631,7 @@ spec:
             zookeeper_log:
                 ttl: "event_date + INTERVAL 1 DAY DELETE"
             tcp_port: 9000
-            user_defined_executable_functions_config: '*function.yaml'
+            user_defined_executable_functions_config: '*functions.yaml'
             user_scripts_path: /var/lib/clickhouse/user_scripts/
             users:
                 default:
@@ -652,7 +652,7 @@ spec:
                   - name: counts
                     type: Array(Float64)
                   - name: quantile
-                    type: Array(Float64)
+                    type: Float64
               command: ./histogramQuantile
               format: CSV
               name: histogramQuantile
