@@ -64,6 +64,22 @@ def _conversation_id(spans: list[dict[str, Any]]) -> str | None:
     return None
 
 
+def _first_attr(spans: list[dict[str, Any]], key: str) -> str | None:
+    for span in spans:
+        value = _attr(span, key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _experiment_variant(spans: list[dict[str, Any]]) -> str | None:
+    return _first_attr(spans, "experiment.variant")
+
+
+def _experiment_run_id(spans: list[dict[str, Any]]) -> str | None:
+    return _first_attr(spans, "experiment.run_id")
+
+
 def _repeated_state(spans: list[dict[str, Any]], services: set[str]) -> bool:
     """True if any cyclic agent emitted the same state hash twice (no progress)."""
 
@@ -166,11 +182,19 @@ class LoopWatcher:
                     trace_id,
                     datetime.now(UTC),
                     reason=reason,
+                    experiment_variant=_experiment_variant(spans),
+                    experiment_run_id=_experiment_run_id(spans),
                 ),
             )
 
         for edge_label, total in edge_totals.items():
             if total > self.config.breaker_edge_max:
+                trace_id = edge_trace.get(edge_label)
+                # Reuse the trace we may already have fetched for the loop check; only
+                # query for an unhealthy edge (rare) whose trace we have not seen.
+                spans = seen_traces.get(trace_id) if trace_id else None
+                if spans is None and trace_id:
+                    spans = seen_traces.setdefault(trace_id, self.client.get_trace(trace_id, window))
                 self._emit(
                     (edge_label, "edge_unhealthy"),
                     Signal(
@@ -179,8 +203,12 @@ class LoopWatcher:
                         edge_label,
                         total,
                         None,
-                        edge_trace.get(edge_label),
+                        trace_id,
                         datetime.now(UTC),
+                        # A hot edge (hop volume over the breaker cap) is a runaway pattern.
+                        breaker_reason="loop",
+                        experiment_variant=_experiment_variant(spans) if spans else None,
+                        experiment_run_id=_experiment_run_id(spans) if spans else None,
                     ),
                 )
 

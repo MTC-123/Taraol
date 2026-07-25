@@ -148,6 +148,8 @@ def trace_query(trace_id: str) -> dict[str, Any]:
                 _field("agentmesh.output.flagged"),
                 _field("agentmesh.output.category"),
                 _field("agentmesh.state.hash"),
+                _field("experiment.variant"),
+                _field("experiment.run_id"),
             ],
             "disabled": False,
             "limit": 1000,
