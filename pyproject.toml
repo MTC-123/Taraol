@@ -1,5 +1,5 @@
 [project]
-name = "otel-agent-kit"
+name = "taraol"
 version = "0.1.0"
 description = "Drop-in OpenTelemetry instrumentation for multi-agent systems: gen_ai spans, cross-process traceparent, cost rollup, loop/injection/breaker/provenance analysis — in ~3 lines."
 readme = "README.md"
@@ -25,10 +25,10 @@ mcp = ["mcp>=1.28.1"]
 search = ["httpx>=0.28.0"]
 # Real LLM providers (gemini/openai-compatible) via the kit's llm module.
 llm = ["httpx>=0.28.0"]
-all = ["otel-agent-kit[http,a2a,detection,mcp,search,llm]"]
+all = ["taraol[http,a2a,detection,mcp,search,llm]"]
 
 [project.scripts]
-otel-agent-kit = "otel_agent_kit.cli:main"
+taraol = "taraol.cli:main"
 
 [dependency-groups]
 # Everything the test suite + tooling needs (the extras' runtime deps included).
@@ -47,10 +47,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/otel_agent_kit"]
+packages = ["src/taraol"]
 # Data files (pricing.yaml, dashboards/*.json) live inside the package and are
 # included automatically; artifacts ensures they ship even if git-ignored.
-artifacts = ["src/otel_agent_kit/data/**"]
+artifacts = ["src/taraol/data/**"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

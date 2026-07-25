@@ -1,7 +1,7 @@
 {
   "title": "AgentLab — Experiment Comparison",
   "description": "Compare operational behavior across experiment variants: cost, tokens, latency, runaway loops, breaker trips, and failures — split by experiment.variant. Set the time range to one run to compare a single run; widen it to see regression across runs. SigNoz is the dashboard.",
-  "tags": ["otel-agent-kit", "agentlab", "experiment"],
+  "tags": ["taraol", "agentlab", "experiment"],
   "version": "v5",
   "uploadedGrafana": false,
   "variables": {},

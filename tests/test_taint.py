@@ -7,9 +7,9 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
-from otel_agent_kit import attrs
-from otel_agent_kit.propagation import extract_from, inject_into
-from otel_agent_kit.taint import Taint, mark_taint, taint_from_baggage, taint_scope
+from taraol import attrs
+from taraol.propagation import extract_from, inject_into
+from taraol.taint import Taint, mark_taint, taint_from_baggage, taint_scope
 
 
 def test_mark_taint_uses_namespace() -> None:

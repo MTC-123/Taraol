@@ -1,4 +1,4 @@
-"""The instrumentation handle returned by :func:`otel_agent_kit.instrument`.
+"""The instrumentation handle returned by :func:`taraol.instrument`.
 
 Provides the small set of context managers a caller composes to get correct gen_ai
 spans, cost rollup, and the taint/breaker/provenance signals — without touching any

@@ -1,7 +1,7 @@
-# research-mesh — reference app on otel-agent-kit
+# research-mesh — reference app on taraol
 
 A five-agent pipeline (`planner → researcher → writer → critic → router`) built **only**
-on [`otel-agent-kit`](../../packages/otel-agent-kit). It demonstrates the whole library:
+on [`taraol`](../../packages/taraol). It demonstrates the whole library:
 distributed traces + Service Map, per-agent cost, a real web-search tool, opt-in
 LangSmith-style content capture, runaway-loop detection, per-edge circuit breaker, and the
 grounded `explain --replay`.
@@ -53,7 +53,7 @@ attributes for the captured prompt/output, and an `execute_tool` span for the se
 Per-step replay in the terminal:
 
 ```sh
-otel-agent-kit explain <trace-id> --replay
+taraol explain <trace-id> --replay
 ```
 
 ## Configuration (env)

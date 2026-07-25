@@ -5,7 +5,7 @@ default handle from ``instrument()``. They are thin: each just opens the same co
 manager you'd write by hand, so anything the CMs do (cost rollup, capture, propagation)
 still applies. The CM API stays the public API for streaming / async / fine control.
 
-    from otel_agent_kit import instrument, agent, chat, tool, record_chat, record_chat_content
+    from taraol import instrument, agent, chat, tool, record_chat, record_chat_content
 
     instrument("planner")
 

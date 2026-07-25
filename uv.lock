@@ -419,90 +419,6 @@ wheels = [
 ]
 
 [[package]]
-name = "otel-agent-kit"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp-proto-grpc" },
-    { name = "opentelemetry-sdk" },
-    { name = "pyyaml" },
-]
-
-[package.optional-dependencies]
-a2a = [
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "uvicorn" },
-]
-all = [
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "mcp" },
-    { name = "opentelemetry-exporter-otlp-proto-http" },
-    { name = "uvicorn" },
-]
-detection = [
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "uvicorn" },
-]
-http = [
-    { name = "opentelemetry-exporter-otlp-proto-http" },
-]
-llm = [
-    { name = "httpx" },
-]
-mcp = [
-    { name = "mcp" },
-]
-search = [
-    { name = "httpx" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "mcp" },
-    { name = "opentelemetry-exporter-otlp-proto-http" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "uvicorn" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", marker = "extra == 'a2a'", specifier = ">=0.115.0" },
-    { name = "fastapi", marker = "extra == 'detection'", specifier = ">=0.115.0" },
-    { name = "httpx", marker = "extra == 'a2a'", specifier = ">=0.28.0" },
-    { name = "httpx", marker = "extra == 'detection'", specifier = ">=0.28.0" },
-    { name = "httpx", marker = "extra == 'llm'", specifier = ">=0.28.0" },
-    { name = "httpx", marker = "extra == 'search'", specifier = ">=0.28.0" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.28.1" },
-    { name = "opentelemetry-api", specifier = ">=1.28.0" },
-    { name = "opentelemetry-exporter-otlp-proto-grpc", specifier = ">=1.28.0" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'http'", specifier = ">=1.28.0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.28.0" },
-    { name = "otel-agent-kit", extras = ["http", "a2a", "detection", "mcp", "search", "llm"], marker = "extra == 'all'" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "uvicorn", marker = "extra == 'a2a'", specifier = ">=0.32.0" },
-    { name = "uvicorn", marker = "extra == 'detection'", specifier = ">=0.32.0" },
-]
-provides-extras = ["http", "a2a", "detection", "mcp", "search", "llm", "all"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "fastapi", specifier = ">=0.115.0" },
-    { name = "httpx", specifier = ">=0.28.0" },
-    { name = "mcp", specifier = ">=1.28.1" },
-    { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.28.0" },
-    { name = "pytest", specifier = ">=8.3.0" },
-    { name = "ruff", specifier = ">=0.8.0" },
-    { name = "uvicorn", specifier = ">=0.32.0" },
-]
-
-[[package]]
 name = "packaging"
 version = "26.2"
 source = { registry = "https://pypi.org/simple" }
@@ -789,6 +705,90 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/eb/e3/7c1dc7381d9f8ab7d854328ebfa884e62cb3f3d8549ddfd37c7814f42afa/starlette-1.3.1.tar.gz", hash = "sha256:05d0213193f2fbaae60e2ecb593b4add4262ad4e46536b54abe36f11a71724e0", size = 2703240, upload-time = "2026-06-12T09:23:11.602Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/bb/2799cc2ede3ed41131f8975621e7213dfc7ef4acbbaadfa440f32500c370/starlette-1.3.1-py3-none-any.whl", hash = "sha256:c7372aae11c3c3f26a42df7bd626cec2f47d03483d261d369516a615a53714c6", size = 73632, upload-time = "2026-06-12T09:23:10.017Z" },
+]
+
+[[package]]
+name = "taraol"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc" },
+    { name = "opentelemetry-sdk" },
+    { name = "pyyaml" },
+]
+
+[package.optional-dependencies]
+a2a = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "uvicorn" },
+]
+all = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "mcp" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "uvicorn" },
+]
+detection = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "uvicorn" },
+]
+http = [
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+]
+llm = [
+    { name = "httpx" },
+]
+mcp = [
+    { name = "mcp" },
+]
+search = [
+    { name = "httpx" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "mcp" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", marker = "extra == 'a2a'", specifier = ">=0.115.0" },
+    { name = "fastapi", marker = "extra == 'detection'", specifier = ">=0.115.0" },
+    { name = "httpx", marker = "extra == 'a2a'", specifier = ">=0.28.0" },
+    { name = "httpx", marker = "extra == 'detection'", specifier = ">=0.28.0" },
+    { name = "httpx", marker = "extra == 'llm'", specifier = ">=0.28.0" },
+    { name = "httpx", marker = "extra == 'search'", specifier = ">=0.28.0" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.28.1" },
+    { name = "opentelemetry-api", specifier = ">=1.28.0" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc", specifier = ">=1.28.0" },
+    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'http'", specifier = ">=1.28.0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.28.0" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "taraol", extras = ["http", "a2a", "detection", "mcp", "search", "llm"], marker = "extra == 'all'" },
+    { name = "uvicorn", marker = "extra == 'a2a'", specifier = ">=0.32.0" },
+    { name = "uvicorn", marker = "extra == 'detection'", specifier = ">=0.32.0" },
+]
+provides-extras = ["http", "a2a", "detection", "mcp", "search", "llm", "all"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "httpx", specifier = ">=0.28.0" },
+    { name = "mcp", specifier = ">=1.28.1" },
+    { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.28.0" },
+    { name = "pytest", specifier = ">=8.3.0" },
+    { name = "ruff", specifier = ">=0.8.0" },
+    { name = "uvicorn", specifier = ">=0.32.0" },
 ]
 
 [[package]]

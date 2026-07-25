@@ -26,12 +26,12 @@ def _signoz(action: str) -> None:
     if action == "up":
         print("\nSigNoz starting. UI: http://localhost:8080")
         print("Point your agents at it:  OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317")
-        print("Import dashboards:        otel-agent-kit dump-dashboards ./dashboards")
-        print("Stop + wipe:              otel-agent-kit signoz down")
+        print("Import dashboards:        taraol dump-dashboards ./dashboards")
+        print("Stop + wipe:              taraol signoz down")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="otel-agent-kit")
+    parser = argparse.ArgumentParser(prog="taraol")
     commands = parser.add_subparsers(dest="command", required=True)
 
     signoz = commands.add_parser("signoz", help="start/stop a local bundled SigNoz backend")

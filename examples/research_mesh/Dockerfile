@@ -1,4 +1,4 @@
-# Build context is the repo root (the otel-agent-kit package lives at the root).
+# Build context is the repo root (the taraol package lives at the root).
 FROM python:3.12-slim
 WORKDIR /app
 COPY --from=astral/uv:0.11.29 /uv /uvx /bin/

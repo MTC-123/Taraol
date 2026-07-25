@@ -12,7 +12,7 @@ Hierarchy (matters once you run more than once)::
 
 Primary API is the fluent builder::
 
-    from otel_agent_kit import Experiment
+    from taraol import Experiment
 
     (Experiment("battery-report", description="Gemini prompt A/B", author="Fraol")
         .variant("baseline", config={"loop_mode": "off"})
@@ -57,7 +57,7 @@ def _git_commit() -> str | None:
 
 def _kit_version() -> str | None:
     try:
-        from otel_agent_kit import __version__
+        from taraol import __version__
 
         return __version__
     except Exception:  # noqa: BLE001 — best-effort metadata probe; never fail the run

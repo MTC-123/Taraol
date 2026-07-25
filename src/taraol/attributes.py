@@ -3,7 +3,7 @@
 All project-specific span attributes live under a single configurable namespace
 (default ``agentmesh``) so a deployment can re-brand without editing call sites.
 GenAI attributes follow the stable ``gen_ai.*`` semantic conventions and are never
-namespaced (see :mod:`otel_agent_kit.semconv`).
+namespaced (see :mod:`taraol.semconv`).
 """
 
 from dataclasses import dataclass

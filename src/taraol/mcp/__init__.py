@@ -1,7 +1,7 @@
 """MCP explain surface over the official SigNoz MCP server.
 
 Exposes a read-only ``SigNozMCPClient`` and a terminal ``explain <trace_id>`` CLI
-that render the grounded facts from :func:`otel_agent_kit.explain.explain_trace`.
+that render the grounded facts from :func:`taraol.explain.explain_trace`.
 """
 
 from .cli import main

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from otel_agent_kit.cycle import find_cycles
+from taraol.cycle import find_cycles
 
 from .budget import BudgetChecker
 from .config import WatcherConfig

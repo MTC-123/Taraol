@@ -44,7 +44,7 @@ def format_replay(trace_id: str, steps: list[Step]) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="otel-agent-kit")
+    parser = argparse.ArgumentParser(prog="taraol")
     commands = parser.add_subparsers(dest="command", required=True)
     explain = commands.add_parser("explain", help="explain a trace using SigNoz data")
     explain.add_argument("trace_id")

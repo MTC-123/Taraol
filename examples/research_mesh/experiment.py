@@ -10,7 +10,7 @@ rides the payload per conversation.
 Then compare — SigNoz is the dashboard (import the experiment-comparison dashboard), or
 from the terminal::
 
-    otel-agent-kit experiment summary battery-report
+    taraol experiment summary battery-report
 
 Needs OTEL_EXPORTER_OTLP_ENDPOINT pointing at the SigNoz collector (so the experiment_run
 records land) and the planner reachable at PLANNER_START_URL.
@@ -20,7 +20,7 @@ import os
 
 import httpx
 
-from otel_agent_kit import Experiment, Variant, current_experiment, instrument
+from taraol import Experiment, Variant, current_experiment, instrument
 
 PLANNER_START_URL = os.environ.get("PLANNER_START_URL", "http://localhost:8000/start")
 EXPERIMENT_ID = os.environ.get("AGENTLAB_EXPERIMENT_ID", "battery-report")
@@ -63,7 +63,7 @@ def main() -> None:
             f"  {variant_result.variant:<10} {variant_result.status}"
             f"  ({variant_result.duration_ms:.0f} ms)"
         )
-    print(f"\nCompare:  otel-agent-kit experiment summary {EXPERIMENT_ID}")
+    print(f"\nCompare:  taraol experiment summary {EXPERIMENT_ID}")
 
 
 if __name__ == "__main__":

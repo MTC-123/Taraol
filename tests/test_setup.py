@@ -1,5 +1,5 @@
-import otel_agent_kit.setup as setup
-from otel_agent_kit import Settings, instrument
+import taraol.setup as setup
+from taraol import Settings, instrument
 
 
 def test_instrument_installs_provider_only_once(monkeypatch) -> None:

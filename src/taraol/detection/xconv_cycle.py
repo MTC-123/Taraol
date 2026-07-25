@@ -1,20 +1,20 @@
 """Cross-conversation cycle detection over aggregated agent edges.
 
-``otel_agent_kit.cycle.find_cycles`` walks a single trace's parent/child span tree and
+``taraol.cycle.find_cycles`` walks a single trace's parent/child span tree and
 cannot see a loop that is spread across separate traces or conversations (an agent
 ping-ponging with a peer a little in each of many conversations).  This module works
 on an aggregated directed edge multiset instead: it enumerates elementary cycles and
 keeps only those whose every edge recurs at least ``min_repeats`` times, so an
 occasional benign back-edge does not trip it.
 
-It returns the same :class:`otel_agent_kit.cycle.Cycle` shape so the signal/controller
+It returns the same :class:`taraol.cycle.Cycle` shape so the signal/controller
 path is unchanged.
 """
 
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 
-from otel_agent_kit.cycle import Cycle
+from taraol.cycle import Cycle
 
 
 def find_directed_cycles(edges: Iterable[tuple[str, str]], min_repeats: int = 2) -> list[Cycle]:

@@ -1,15 +1,15 @@
 from datetime import UTC, datetime
 
-from otel_agent_kit import experiment_report as er
-from otel_agent_kit.detection import loop_watcher as lw
-from otel_agent_kit.detection.signals import Signal
-from otel_agent_kit.detection.signoz_client import (
+from taraol import experiment_report as er
+from taraol.detection import loop_watcher as lw
+from taraol.detection.signals import Signal
+from taraol.detection.signoz_client import (
     ClickHouseClient,
     TimeRange,
     experiment_loop_count_query,
     experiment_span_metrics_query,
 )
-from otel_agent_kit.experiments import HealthScore
+from taraol.experiments import HealthScore
 
 _ROWS = {
     "experiment_span_metrics": [

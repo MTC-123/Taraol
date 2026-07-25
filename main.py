@@ -4,7 +4,7 @@ import uuid
 from dotenv import load_dotenv
 from google import genai
 
-from otel_agent_kit import instrument
+from taraol import instrument
 
 load_dotenv()
 

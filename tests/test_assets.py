@@ -1,4 +1,4 @@
-from otel_agent_kit import assets
+from taraol import assets
 
 
 def test_lists_bundled_dashboards() -> None:

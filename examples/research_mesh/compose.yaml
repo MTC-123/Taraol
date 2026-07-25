@@ -1,5 +1,5 @@
 # research-mesh example: SigNoz (Foundry-rendered) + five agents + the kit's detection
-# watcher and controller, all built on otel-agent-kit. Run from repo root:
+# watcher and controller, all built on taraol. Run from repo root:
 #   docker compose -f examples/research_mesh/compose.yaml up -d --build
 name: research-mesh
 
@@ -80,7 +80,7 @@ services:
     build:
       context: ../..
       dockerfile: examples/research_mesh/Dockerfile
-    command: ["python", "-m", "otel_agent_kit.detection.loop_watcher"]
+    command: ["python", "-m", "taraol.detection.loop_watcher"]
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
       SIGNOZ_CLICKHOUSE_URL: http://signoz-telemetrystore-clickhouse-0-0:8123
@@ -95,7 +95,7 @@ services:
     build:
       context: ../..
       dockerfile: examples/research_mesh/Dockerfile
-    command: ["python", "-m", "otel_agent_kit.detection.controller"]
+    command: ["python", "-m", "taraol.detection.controller"]
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
       OAK_ENFORCE: ${OAK_ENFORCE:-auto}
@@ -109,7 +109,7 @@ services:
     networks:
       - signoz-network
 
-  # Official SigNoz MCP server — powers `otel-agent-kit explain` (grounded post-mortems).
+  # Official SigNoz MCP server — powers `taraol explain` (grounded post-mortems).
   # Reachable from the host at http://localhost:8003/mcp (set SIGNOZ_MCP_URL to that).
   signoz-mcp:
     image: signoz/signoz-mcp-server:v0.1.0

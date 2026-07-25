@@ -1,4 +1,4 @@
-# AGENTS.md — otel-agent-kit
+# AGENTS.md — taraol
 
 Drop-in OpenTelemetry instrumentation for multi-agent systems, shipped as a pip package.
 Any Python agent gets gen_ai-semconv spans, cross-process `traceparent`, cost rollup, and
@@ -6,7 +6,7 @@ the analysis/enforcement toolkit (loop + injection + breaker + provenance) in ~3
 kit is the product; `examples/research_mesh/` is a reference app built on it.
 
 ## Layout
-- `src/otel_agent_kit/` — the package. Core (flat): `setup`, `facade`, `config`, `semconv`,
+- `src/taraol/` — the package. Core (flat): `setup`, `facade`, `config`, `semconv`,
   `attributes`, `cost`, `propagation`, `events`, `capture`, `replay`, `cycle`, `breaker`,
   `taint`, `provenance`, `guardrail`, `quality`, `llm`, `assets`, `cli`, `experiments`
   (AgentLab builder/decorators), `experiment_report` (summary/diff read path, lazy `[detection]`).

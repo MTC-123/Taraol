@@ -10,7 +10,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-_DASHBOARDS = "otel_agent_kit.data.dashboards"
+_DASHBOARDS = "taraol.data.dashboards"
 
 
 def list_dashboards() -> list[str]:
@@ -43,27 +43,27 @@ def dump_dashboards(dest: str | Path) -> list[Path]:
 def list_alerts() -> list[str]:
     """Names of the bundled SigNoz alert-rule fixtures (loop/budget/edge/xconv)."""
 
-    root = resources.files("otel_agent_kit.data.alerts")
+    root = resources.files("taraol.data.alerts")
     return sorted(e.name[:-5] for e in root.iterdir() if e.name.endswith(".json"))
 
 
 def alert(name: str) -> dict[str, Any]:
     """Return a bundled alert-rule fixture as parsed JSON."""
 
-    text = resources.files("otel_agent_kit.data.alerts").joinpath(f"{name}.json").read_text("utf-8")
+    text = resources.files("taraol.data.alerts").joinpath(f"{name}.json").read_text("utf-8")
     return json.loads(text)
 
 
 def terraform_module_path() -> Path:
     """Filesystem path to the bundled Terraform alert module (point a `module {}` at it)."""
 
-    return Path(str(resources.files("otel_agent_kit.data").joinpath("terraform")))
+    return Path(str(resources.files("taraol.data").joinpath("terraform")))
 
 
 def signoz_deploy_path() -> Path:
     """Filesystem path to the bundled SigNoz (Foundry) deployment directory."""
 
-    return Path(str(resources.files("otel_agent_kit.data").joinpath("signoz")))
+    return Path(str(resources.files("taraol.data").joinpath("signoz")))
 
 
 def signoz_compose_path() -> Path:

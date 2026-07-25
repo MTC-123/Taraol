@@ -9,13 +9,13 @@ import httpx
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 
-from otel_agent_kit import semconv
-from otel_agent_kit.attributes import attrs
-from otel_agent_kit.breaker import edge_key, get_registry
-from otel_agent_kit.cost import add_to_request_cost
-from otel_agent_kit.facade import current_conversation_id, current_experiment
-from otel_agent_kit.propagation import inject_into
-from otel_agent_kit.taint import mark_taint, taint_from_baggage
+from taraol import semconv
+from taraol.attributes import attrs
+from taraol.breaker import edge_key, get_registry
+from taraol.cost import add_to_request_cost
+from taraol.facade import current_conversation_id, current_experiment
+from taraol.propagation import inject_into
+from taraol.taint import mark_taint, taint_from_baggage
 
 _NAMES = attrs("agentmesh")
 

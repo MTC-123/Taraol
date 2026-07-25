@@ -37,7 +37,7 @@ def _parse(data: object) -> PriceTable:
 
 
 def _bundled_table() -> PriceTable:
-    text = resources.files("otel_agent_kit.data").joinpath("pricing.yaml").read_text("utf-8")
+    text = resources.files("taraol.data").joinpath("pricing.yaml").read_text("utf-8")
     return _parse(yaml.safe_load(text))
 
 

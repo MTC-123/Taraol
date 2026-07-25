@@ -4,10 +4,10 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from otel_agent_kit import agent, chat, record_chat, record_chat_content, semconv, tool
-from otel_agent_kit.config import Settings
-from otel_agent_kit.cost import CostModel
-from otel_agent_kit.facade import Instrument, set_default_instrument
+from taraol import agent, chat, record_chat, record_chat_content, semconv, tool
+from taraol.config import Settings
+from taraol.cost import CostModel
+from taraol.facade import Instrument, set_default_instrument
 
 
 def _install(*, capture: bool = False) -> InMemorySpanExporter:

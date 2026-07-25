@@ -1,8 +1,8 @@
-"""otel-agent-kit — drop-in OpenTelemetry instrumentation for multi-agent systems.
+"""taraol — drop-in OpenTelemetry instrumentation for multi-agent systems.
 
 Three lines to full observability::
 
-    from otel_agent_kit import instrument
+    from taraol import instrument
     kit = instrument("planner")                       # OTel wired, zero config
     with kit.agent("planner", conversation_id) as _a, kit.chat("gpt-4.1-mini") as c:
         c.record(input_tokens=n_in, output_tokens=n_out)   # gen_ai span + cost rollup

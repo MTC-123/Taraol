@@ -1,6 +1,6 @@
 import httpx
 
-from otel_agent_kit.tools import search
+from taraol.tools import search
 
 
 def test_fake_search_is_deterministic_and_offline(monkeypatch) -> None:

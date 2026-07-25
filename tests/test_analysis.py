@@ -1,4 +1,4 @@
-from otel_agent_kit import attrs, find_cycles, find_directed_cycles, origin_of_bad_output
+from taraol import attrs, find_cycles, find_directed_cycles, origin_of_bad_output
 
 
 def test_find_cycles_detects_ping_pong() -> None:

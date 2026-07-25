@@ -1,4 +1,4 @@
-"""One research-mesh agent, built entirely on otel-agent-kit.
+"""One research-mesh agent, built entirely on taraol.
 
 Shows the adopter pattern: instrument() once, then wrap each step with the kit's
 context managers. The researcher does a real web search (Tavily/fake). Agent output is
@@ -17,13 +17,13 @@ from uuid import uuid4
 
 from opentelemetry import trace
 
-from otel_agent_kit import ExperimentContext, instrument, llm, use_experiment
-from otel_agent_kit.attributes import attrs
-from otel_agent_kit.guardrail import INPUT, OUTPUT, scan
-from otel_agent_kit.integrations.a2a import A2AClient, A2AError, EdgeBrokenError, create_app, run
-from otel_agent_kit.quality import scan_output
-from otel_agent_kit.taint import Taint, mark_taint, taint_from_baggage, taint_scope
-from otel_agent_kit.tools import search
+from taraol import ExperimentContext, instrument, llm, use_experiment
+from taraol.attributes import attrs
+from taraol.guardrail import INPUT, OUTPUT, scan
+from taraol.integrations.a2a import A2AClient, A2AError, EdgeBrokenError, create_app, run
+from taraol.quality import scan_output
+from taraol.taint import Taint, mark_taint, taint_from_baggage, taint_scope
+from taraol.tools import search
 
 from . import mesh
 

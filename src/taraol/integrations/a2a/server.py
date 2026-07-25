@@ -13,9 +13,9 @@ from fastapi import FastAPI, Request
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from otel_agent_kit.breaker import get_registry
-from otel_agent_kit.cost import request_cost_scope
-from otel_agent_kit.propagation import extract_from
+from taraol.breaker import get_registry
+from taraol.cost import request_cost_scope
+from taraol.propagation import extract_from
 
 Handler = Callable[[dict[str, Any]], dict[str, Any] | Awaitable[dict[str, Any]]]
 
@@ -24,7 +24,7 @@ class A2AServer:
     def __init__(
         self, *, tracer: trace.Tracer | None = None, clock: Callable[[], float] = time.monotonic
     ) -> None:
-        self.tracer = tracer or trace.get_tracer("otel_agent_kit.integrations.a2a.server")
+        self.tracer = tracer or trace.get_tracer("taraol.integrations.a2a.server")
         self.handlers: dict[str, Handler] = {}
         self._clock = clock
         self._paused: dict[str, float] = {}

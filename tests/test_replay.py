@@ -1,5 +1,5 @@
-from otel_agent_kit import semconv
-from otel_agent_kit.replay import build_steps
+from taraol import semconv
+from taraol.replay import build_steps
 
 
 def _chat(span_id, parent, service, ts, *, captured=False):
@@ -75,7 +75,7 @@ def test_content_decoded_when_captured_absent_when_not() -> None:
 
 
 def test_format_replay_renders_agents_and_marks_uncaptured() -> None:
-    from otel_agent_kit.mcp.cli import format_replay
+    from taraol.mcp.cli import format_replay
 
     steps = build_steps(
         [

@@ -1,4 +1,4 @@
-# otel-agent-kit
+# taraol
 
 **Drop-in OpenTelemetry for multi-agent systems.** Any Python agent gets gen_ai-semconv spans,
 cross-process `traceparent`, cost rollup, a live SigNoz topology, and an analysis + enforcement
@@ -11,8 +11,8 @@ toolkit (runaway-loop detection, injection blast-radius, per-edge breaker, bad-o
 ## Install
 
 ```sh
-pip install otel-agent-kit            # core: OTel SDK + gRPC OTLP + pyyaml
-pip install "otel-agent-kit[all]"     # + a2a, detection, mcp, search, llm, http extras
+pip install taraol            # core: OTel SDK + gRPC OTLP + pyyaml
+pip install "taraol[all]"     # + a2a, detection, mcp, search, llm, http extras
 ```
 
 ## Backend
@@ -21,13 +21,13 @@ The kit is the OTLP **client**. Point it at any SigNoz — Cloud/existing collec
 `OTEL_EXPORTER_OTLP_ENDPOINT`, or boot one locally:
 
 ```sh
-otel-agent-kit signoz up      # local SigNoz (UI :8080, OTLP :4317); `signoz down` to wipe
+taraol signoz up      # local SigNoz (UI :8080, OTLP :4317); `signoz down` to wipe
 ```
 
 ## Quickstart
 
 ```python
-from otel_agent_kit import instrument
+from taraol import instrument
 
 kit = instrument("planner")                                     # OTel wired, zero config
 with kit.agent("planner", conversation_id) as _a, kit.chat("gemini-2.5-flash") as c:
@@ -49,7 +49,7 @@ with kit.chat("gemini-2.5-flash") as c:
     c.record(input_tokens=n_in, output_tokens=n_out)
     c.record_content(prompt=prompt, completion=output)          # gen_ai.input/output.messages
 
-otel-agent-kit explain <trace-id> --replay                      # per-agent input -> output -> tools
+taraol explain <trace-id> --replay                      # per-agent input -> output -> tools
 ```
 
 Captured text is truncated (default 12k/field) with an `agentmesh.content.truncated` marker.
@@ -62,7 +62,7 @@ compares them on real telemetry — cost, latency, tokens, **loops, breaker trip
 answer quality. **SigNoz is the dashboard.**
 
 ```python
-from otel_agent_kit import Experiment
+from taraol import Experiment
 
 (Experiment("battery-report", author="Fraol")
     .variant("baseline", config={"loop_mode": "off"})
@@ -75,8 +75,8 @@ recorded `failed` and the run continues. Compare in the terminal (SigNoz Query A
 `SIGNOZ_API_KEY`, else ClickHouse fallback) or import the **experiment-comparison** dashboard:
 
 ```sh
-otel-agent-kit experiment summary battery-report               # per-variant table + health
-otel-agent-kit experiment diff <run1> <run2>                   # cost/latency/loops deltas
+taraol experiment summary battery-report               # per-variant table + health
+taraol experiment diff <run1> <run2>                   # cost/latency/loops deltas
 ```
 
 ```
@@ -92,8 +92,8 @@ baseline-vs-runaway: [`examples/research_mesh/experiment.py`](examples/research_
 ## Analysis + enforcement toolkit
 
 ```python
-from otel_agent_kit import find_cycles, find_directed_cycles, origin_of_bad_output
-from otel_agent_kit.breaker import get_registry, edge_key
+from taraol import find_cycles, find_directed_cycles, origin_of_bad_output
+from taraol.breaker import get_registry, edge_key
 
 find_cycles(trace_spans)                      # per-trace loops
 origin_of_bad_output(spans, kit.names)        # who produced bad output, who consumed it
@@ -104,7 +104,7 @@ kit.mark_injection("jailbreak")               # taint active span; spreads via b
 The `[detection]` extra ships a **watcher** (flags runaway loops / budget breaches / injection
 blast-radius / unhealthy edges) and a **controller** (alert webhook -> pause agent or trip a breaker
 -> trace-correlated audit). Cross-process context: `inject_into(headers)` / `extract_from(headers)`.
-Bundled dashboards + alert Terraform: `otel-agent-kit dump-dashboards ./out`.
+Bundled dashboards + alert Terraform: `taraol dump-dashboards ./out`.
 
 ## Configuration
 

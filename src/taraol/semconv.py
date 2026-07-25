@@ -2,7 +2,7 @@
 
 These are the vendor-neutral ``gen_ai.*`` keys and are never re-namespaced. Project
 attributes (cost, taint, breaker, output) go through
-:func:`otel_agent_kit.attributes.attrs` instead.
+:func:`taraol.attributes.attrs` instead.
 """
 
 GEN_AI_OPERATION_NAME = "gen_ai.operation.name"

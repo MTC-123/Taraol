@@ -2,7 +2,7 @@
 
 Provider abstraction: the SigNoz Query API when ``SIGNOZ_API_KEY`` is set (works on Cloud),
 else the direct ClickHouse fallback (works on Community) — the *same* selection the watcher
-uses (:func:`otel_agent_kit.detection.loop_watcher.make_client`). SigNoz is the dashboard;
+uses (:func:`taraol.detection.loop_watcher.make_client`). SigNoz is the dashboard;
 this is its terminal companion for a quick, scriptable read.
 
 Imports the ``[detection]`` extra, so it is only pulled in lazily by the CLI.
