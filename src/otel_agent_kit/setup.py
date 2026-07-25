@@ -1,5 +1,6 @@
 """``instrument()`` — the one-call OpenTelemetry bootstrap (idempotent)."""
 
+import atexit
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -59,10 +60,14 @@ def _install_provider(settings: Settings) -> None:
     provider = TracerProvider(resource=resource, sampler=ParentBased(root=ALWAYS_ON))
     provider.add_span_processor(BatchSpanProcessor(_span_exporter(settings)))
     trace.set_tracer_provider(provider)
+    # Flush batched telemetry on process exit so short scripts don't drop their spans
+    # before the batch processor exports them (a common drop-in gotcha).
+    atexit.register(provider.force_flush)
     if settings.enable_logs:
         log_provider = LoggerProvider(resource=resource)
         log_provider.add_log_record_processor(BatchLogRecordProcessor(_log_exporter(settings)))
         _logs.set_logger_provider(log_provider)
+        atexit.register(log_provider.force_flush)
     # TraceContext MUST stay first so traceparent is on every hop; baggage carries taint.
     propagate.set_global_textmap(
         CompositePropagator([TraceContextTextMapPropagator(), W3CBaggagePropagator()])
