@@ -1,4 +1,4 @@
-# Rendered by Foundry v0.2.11. Do not edit deploy/signoz/pours/ by hand.
+# Rendered by Foundry v0.2.11. Do not edit signoz/pours/ by hand.
 apiVersion: v1alpha1
 kind: Installation
 metadata:

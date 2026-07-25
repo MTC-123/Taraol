@@ -134,4 +134,10 @@ See [`examples/research_mesh/`](examples/research_mesh/) — a planner->research
 critic->router pipeline with real web search, real output->input threading, opt-in capture, and
 the self-defending loop/breaker beat, plus a one-command SigNoz + agents `compose.yaml`.
 
+**Reproducible SigNoz deploy (Foundry):** the example ships a committed
+[`casting.yaml`](examples/research_mesh/signoz/casting.yaml) +
+[`casting.yaml.lock`](examples/research_mesh/signoz/casting.yaml.lock) — reproduce with
+`foundryctl cast -f examples/research_mesh/signoz/casting.yaml`. The example `compose.yaml`
+includes the same Foundry-rendered stack.
+
 Apache-2.0.
