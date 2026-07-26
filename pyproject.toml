@@ -35,6 +35,8 @@ taraol = "taraol.cli:main"
 dev = [
     "pytest>=8.3.0",
     "ruff>=0.8.0",
+    # scripts/make_gifs.py renders the animated figures in docs/.
+    "pillow>=11.0.0",
     "httpx>=0.28.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",

@@ -226,6 +226,7 @@ more stable, and safer — and should I deploy it?"*
 - [Self-defending mesh — detection & enforcement](docs/self-defense.md)
 - [Architecture & instrumentation tiers](docs/architecture.md)
 - [Reproducible SigNoz with Foundry](docs/foundry.md)
+- [Launch write-up](docs/blog-post.md) — the narrative tour (figures: `uv run python scripts/make_gifs.py`)
 
 ## Configuration
 
