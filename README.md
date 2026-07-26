@@ -42,13 +42,13 @@ in four verbs:
 ## Features
 
 - 🔍 **End-to-end distributed tracing** — gen_ai semantic conventions, W3C traceparent across
-  processes and machines.
+  processes and machines. [Learn more →](docs/observability.md)
 - 🗺️ **Live Service Map** — the real topology, drawn by SigNoz from traces. No diagram to
   maintain.
 - 💰 **Automatic token & cost tracking** — read straight off the returned SDK response
   (google-genai, OpenAI-compatible, Anthropic, flat shapes).
 - 🧠 **Prompt & response replay** — `taraol explain <trace> --replay`; opt-in, private by
-  default.
+  default. [Learn more →](docs/observability.md)
 - 🧪 **AgentLab** — compare variants on cost / latency / loops / breaker trips / failures.
   [Learn more →](docs/agentlab.md)
 - 🛡️ **Self-defending mesh** — loop detection, per-edge circuit breakers, injection taint,
@@ -221,6 +221,7 @@ more stable, and safer — and should I deploy it?"*
 
 ## Documentation
 
+- [Observability — instrumentation, tracing, cost, replay](docs/observability.md)
 - [AgentLab — operational experiments](docs/agentlab.md)
 - [Self-defending mesh — detection & enforcement](docs/self-defense.md)
 - [Architecture & instrumentation tiers](docs/architecture.md)
