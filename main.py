@@ -1,13 +1,13 @@
-"""taraol quickstart — a real AgentLab experiment against live Gemini + SigNoz.
+"""taraol quickstart — compare AI agent variants with one function call.
 
-Two decorators instrument everything: @agent opens the step span, @chat auto-extracts
-tokens + cost from the returned SDK response. The A/B: does a terse prompt beat a verbose
-one on cost and latency? A third, intentionally broken variant proves a failure is
-recorded — not fatal.
+Two decorators are the entire instrumentation: @agent opens the step span, @chat reads
+tokens, cost, and (opted-in) prompt/completion straight off the returned SDK response.
+The experiment: a docs assistant — does a terse prompt beat a verbose one on cost and
+latency? A third, intentionally broken variant proves a failure is recorded, not fatal.
 
 Setup (.env): GEMINI_API_KEY, OTEL_EXPORTER_OTLP_ENDPOINT (e.g. http://localhost:4317).
 Read back:    SIGNOZ_CLICKHOUSE_URL=http://localhost:8123 \
-                  taraol experiment summary prompt-style-ab --run <run_id>
+                  taraol experiment summary docs-assistant --run <run_id>
 """
 
 import os
@@ -15,14 +15,13 @@ import os
 from dotenv import load_dotenv
 from google import genai
 
-from taraol import Experiment, Variant, agent, chat, instrument, record_chat_content
+from taraol import Experiment, Variant, agent, chat, instrument
 
 # --- setup ---------------------------------------------------------------------------
 
 load_dotenv()
 
 MODEL = "gemini-2.5-flash"
-EXPERIMENT_ID = "prompt-style-ab"
 
 client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY") or os.environ["GEMINI_API_KEY"])
 instrument("assistant", capture_content=True)  # OTLP endpoint comes from the environment
@@ -33,35 +32,31 @@ PROMPTS = {
     "verbose": f"{QUESTION} Answer in three detailed paragraphs.",
 }
 
-# --- the agent (all telemetry = these two decorators) --------------------------------
+# --- the agent (all telemetry = these two decorators) ----------------------------------
 
 
-@chat(MODEL)
+@chat(MODEL)  # tokens + cost + captured content, all read off the returned response
 def think(prompt: str):
-    """Chat span. Tokens + cost are read off the returned response automatically."""
-    response = client.models.generate_content(model=MODEL, contents=prompt)
-    record_chat_content(prompt=prompt, completion=response.text)  # content capture is opt-in
-    return response
+    return client.models.generate_content(model=MODEL, contents=prompt)
 
 
-@agent(name="assistant")
+@agent(name="assistant")  # step span; experiment.id / variant / run_id ride along
 def ask(variant: Variant) -> None:
-    """Agent span; experiment.id / variant / run_id tags ride along on every span."""
     text = think(PROMPTS[variant.style]).text  # "broken" has no such style -> KeyError
     print(f"  [{variant.name}] {text[:64].strip()}...")
 
 
-# --- run the experiment ----------------------------------------------------------------
+# --- run the experiment -----------------------------------------------------------------
 
 result = (
-    Experiment(EXPERIMENT_ID, description="terse vs verbose prompt", author="Fraol")
-    .variant("terse", config={"style": "terse"})
-    .variant("verbose", config={"style": "verbose"})
-    .variant("broken", config={"style": "does-not-exist"})  # proves failure-capture
+    Experiment("docs-assistant", description="terse vs verbose prompt", author="Fraol")
+    .variant("terse", style="terse")
+    .variant("verbose", style="verbose")
+    .variant("broken", style="does-not-exist")  # proves failure-capture
     .run(ask)
 )
 
-# --- report ----------------------------------------------------------------------------
+# --- report ------------------------------------------------------------------------------
 
 WIDTH = 58
 print(f"\nExperiment  {result.experiment_id}")
@@ -77,5 +72,7 @@ ok = sum(r.status == "success" for r in result.results)
 print(f"{ok} succeeded, {len(result.results) - ok} failed")
 print(
     "\nCompare:  SIGNOZ_CLICKHOUSE_URL=http://localhost:8123 "
-    f"taraol experiment summary {EXPERIMENT_ID} --run {result.run_id}"
+    f"taraol experiment summary {result.experiment_id} --run {result.run_id}"
 )
+# (result.summary() returns the same table from code — give the collector a few
+#  seconds after .run() for the batched telemetry to land.)

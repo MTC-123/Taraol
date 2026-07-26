@@ -71,20 +71,28 @@ taraol explain <trace-id> --replay                      # per-agent input -> out
 ```
 
 Captured text is truncated (default 12k/field) with an `agentmesh.content.truncated` marker.
+With the `@chat` decorator no call is needed at all — once opted in, prompt + completion are
+captured off the function argument and returned response automatically.
 
-## AgentLab — compare operational behavior
+## AgentLab — compare AI agent variants with one function call
 
 Which prompt, model, or workflow is cheaper, faster, and *safer to run*? AgentLab tags every span
 + signal with `experiment.id` / `variant` / `run_id`, fires the same workload once per variant, and
 compares them on real telemetry — cost, latency, tokens, **loops, breaker trips, failures** — not
 answer quality. **SigNoz is the dashboard.**
 
+```
+variant A ─┐                           cost · latency · tokens
+variant B ─┼─ AgentLab run ──> SigNoz ── loops · breakers · fails ──> pick the safest
+variant C ─┘  (one run_id)             dashboard + summary CLI
+```
+
 ```python
 from taraol import Experiment
 
 (Experiment("converge-vs-runaway", author="Fraol")
-    .variant("baseline", config={"loop_mode": "off"})
-    .variant("runaway",  config={"loop_mode": "storm"})
+    .variant("baseline", loop_mode="off")
+    .variant("runaway",  loop_mode="storm")
     .run(workload))                                             
 ```
 
