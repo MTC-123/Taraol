@@ -67,6 +67,61 @@ def test_bare_agent_and_tool_default_to_func_name() -> None:
     assert "execute_tool fetch" in names
 
 
+class _GenAIResponse:
+    """google-genai shape: usage_metadata.prompt_token_count/candidates_token_count."""
+
+    class _Meta:
+        prompt_token_count = 100
+        candidates_token_count = 50
+
+    usage_metadata = _Meta()
+    text = "hi"
+
+
+class _OpenAIResponse:
+    """OpenAI shape: usage.prompt_tokens/completion_tokens."""
+
+    class _Usage:
+        prompt_tokens = 30
+        completion_tokens = 7
+
+    usage = _Usage()
+
+
+def test_chat_auto_extracts_usage_from_returned_response() -> None:
+    exporter = _install()
+
+    @chat("gpt-4.1-mini")
+    def genai_call():
+        return _GenAIResponse()
+
+    @chat("gpt-4.1-mini")
+    def openai_call():
+        return _OpenAIResponse()
+
+    assert genai_call().text == "hi"  # the raw response passes through untouched
+    openai_call()
+    spans = exporter.get_finished_spans()
+    assert spans[0].attributes[semconv.GEN_AI_USAGE_INPUT_TOKENS] == 100
+    assert spans[0].attributes[semconv.GEN_AI_USAGE_OUTPUT_TOKENS] == 50
+    assert spans[0].attributes["agentmesh.cost.direct_usd"] > 0
+    assert spans[1].attributes[semconv.GEN_AI_USAGE_INPUT_TOKENS] == 30
+
+
+def test_explicit_record_chat_wins_over_auto_extraction() -> None:
+    exporter = _install()
+
+    @chat("gpt-4.1-mini")
+    def call():
+        record_chat(input_tokens=1, output_tokens=2)
+        return _GenAIResponse()  # would auto-extract 100/50 if not already recorded
+
+    call()
+    span = exporter.get_finished_spans()[0]
+    assert span.attributes[semconv.GEN_AI_USAGE_INPUT_TOKENS] == 1
+    assert span.attributes[semconv.GEN_AI_USAGE_OUTPUT_TOKENS] == 2
+
+
 def test_decorator_without_instrument_raises() -> None:
     set_default_instrument(None)  # type: ignore[arg-type]
 

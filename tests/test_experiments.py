@@ -150,6 +150,15 @@ def test_health_score_default_and_custom_weights() -> None:
     assert HealthScore(loop_weight=1).score(loops=2) == 98.0
 
 
+def test_variant_config_reads_as_attributes() -> None:
+    v = Variant("a", {"style": "terse", "loop_mode": "off"})
+    assert v.style == "terse"
+    assert v.loop_mode == "off"
+    assert v.name == "a"  # real fields untouched
+    with pytest.raises(AttributeError, match="style2"):
+        _ = v.style2
+
+
 def test_health_score_penalizes_failures() -> None:
     hs = HealthScore()
     assert hs.score(failures=1) == 80.0

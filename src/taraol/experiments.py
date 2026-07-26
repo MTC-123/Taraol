@@ -106,10 +106,20 @@ class ExperimentMetadata:
 
 @dataclass(frozen=True, slots=True)
 class Variant:
-    """One arm of an experiment: a name + a bag of knobs the workload reads."""
+    """One arm of an experiment: a name + a bag of knobs the workload reads.
+
+    Config knobs read as attributes too: ``variant.style`` == ``variant.config["style"]``.
+    """
 
     name: str
     config: Mapping[str, Any] = field(default_factory=dict)
+
+    def __getattr__(self, key: str) -> Any:
+        # Only called for names that aren't real fields; delegate to the config bag.
+        try:
+            return self.config[key]
+        except KeyError:
+            raise AttributeError(f"variant {self.name!r} has no config knob {key!r}") from None
 
 
 @dataclass(frozen=True, slots=True)

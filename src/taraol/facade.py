@@ -110,13 +110,21 @@ class ChatSpan:
         self._input = 0
         self._output = 0
         self._finish = "unknown"
+        self._recorded = False
 
     @property
     def span(self) -> object:
         return self._span
 
+    @property
+    def recorded(self) -> bool:
+        """True once usage was recorded (lets the @chat auto-extractor stay hands-off)."""
+
+        return self._recorded
+
     def record(self, *, input_tokens: int, output_tokens: int, finish_reason: str = "stop") -> None:
         self._input, self._output, self._finish = input_tokens, output_tokens, finish_reason
+        self._recorded = True
         self._span.set_attribute(semconv.GEN_AI_USAGE_INPUT_TOKENS, input_tokens)  # type: ignore[attr-defined]
         self._span.set_attribute(semconv.GEN_AI_USAGE_OUTPUT_TOKENS, output_tokens)  # type: ignore[attr-defined]
         self._span.set_attribute(semconv.GEN_AI_RESPONSE_FINISH_REASONS, (finish_reason,))  # type: ignore[attr-defined]

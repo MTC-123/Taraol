@@ -32,6 +32,27 @@ from .facade import ChatSpan, get_default_instrument
 
 _current_chat: ContextVar[ChatSpan | None] = ContextVar("oak_current_chat", default=None)
 
+# (usage attr on the response, prompt-tokens attr, completion-tokens attr) per SDK shape.
+_USAGE_SHAPES = (
+    ("usage_metadata", "prompt_token_count", "candidates_token_count"),  # google-genai
+    ("usage", "prompt_tokens", "completion_tokens"),  # OpenAI-compatible
+    ("usage", "input_tokens", "output_tokens"),  # Anthropic
+)
+
+
+def _extract_usage(result: Any) -> tuple[int, int] | None:
+    """Duck-type token usage out of a raw SDK response (genai/OpenAI/Anthropic shapes)."""
+
+    for usage_attr, in_attr, out_attr in _USAGE_SHAPES:
+        usage = getattr(result, usage_attr, None)
+        if usage is None:
+            continue
+        input_tokens = getattr(usage, in_attr, None)
+        output_tokens = getattr(usage, out_attr, None)
+        if isinstance(input_tokens, int) and isinstance(output_tokens, int):
+            return input_tokens, output_tokens
+    return None
+
 
 def agent(
     func: Callable | None = None,
@@ -72,8 +93,19 @@ def tool(
 
 
 def chat(model: str, *, provider: str | None = None) -> Callable:
-    """Wrap a function as a ``chat`` span for ``model``; record usage/content from inside
-    the function with :func:`record_chat` / :func:`record_chat_content`."""
+    """Wrap a function as a ``chat`` span for ``model``.
+
+    Return the raw SDK response and token usage is extracted automatically (google-genai,
+    OpenAI-compatible, and Anthropic response shapes) — no extra call needed::
+
+        @chat("gemini-2.5-flash")
+        def think(prompt):
+            return client.models.generate_content(model=MODEL, contents=prompt)
+
+    :func:`record_chat` still works from inside for explicit/streaming cases (and always
+    wins over auto-extraction); :func:`record_chat_content` stays the explicit, opt-in way
+    to capture prompt/completion text.
+    """
 
     def deco(f: Callable) -> Callable:
         @functools.wraps(f)
@@ -81,9 +113,14 @@ def chat(model: str, *, provider: str | None = None) -> Callable:
             with get_default_instrument().chat(model, provider=provider) as chat_span:
                 token = _current_chat.set(chat_span)
                 try:
-                    return f(*args, **kwargs)
+                    result = f(*args, **kwargs)
                 finally:
                     _current_chat.reset(token)
+                if not chat_span.recorded:
+                    usage = _extract_usage(result)
+                    if usage is not None:
+                        chat_span.record(input_tokens=usage[0], output_tokens=usage[1])
+                return result
 
         return wrapper
 
