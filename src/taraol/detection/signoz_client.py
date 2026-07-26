@@ -1,0 +1,635 @@
+"""Thin, read-only SigNoz v5 Query Builder client and reusable query shapes."""
+
+import json
+import re
+import time
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any
+
+import httpx
+
+
+class SigNozQueryError(RuntimeError):
+    """SigNoz rejected a query or returned a response the watcher cannot use."""
+
+
+@dataclass(frozen=True, slots=True)
+class TimeRange:
+    start_ms: int
+    end_ms: int
+
+
+def _field(name: str, context: str = "span") -> dict[str, str]:
+    return {"name": name, "fieldContext": context}
+
+
+def _escape(value: str) -> str:
+    return value.replace("'", "\\'")
+
+
+def _experiment_where(
+    experiment_id: str | None, run_id: str | None, *, id_key: str, run_key: str
+) -> list[str]:
+    clauses = []
+    if experiment_id:
+        clauses.append(f"{id_key} = '{_escape(experiment_id)}'")
+    if run_id:
+        clauses.append(f"{run_key} = '{_escape(run_id)}'")
+    return clauses
+
+
+def _extract_eq(expression: str, key: str) -> str | None:
+    """Pull ``key = '...'`` back out of a filter expression (for the ClickHouse fallback)."""
+
+    match = re.search(rf"(?<![\w.]){re.escape(key)}\s*=\s*'((?:[^'\\]|\\.)*)'", expression)
+    return match.group(1).replace("\\'", "'") if match else None
+
+
+def velocity_query() -> dict[str, Any]:
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "velocity",
+            "signal": "traces",
+            "stepInterval": 1,
+            "aggregations": [{"expression": "count()", "alias": "hop_count"}],
+            "filter": {
+                "expression": "name = 'a2a.call' AND agentmesh.src EXISTS AND peer.service EXISTS"
+            },
+            "groupBy": [_field("trace_id"), _field("agentmesh.src"), _field("peer.service")],
+            "disabled": False,
+        },
+    }
+
+
+def xconv_velocity_query() -> dict[str, Any]:
+    """A2A edges grouped by conversation so a loop spread across separate traces or
+    conversations can be reconstructed from the union of edges."""
+
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "xconv_velocity",
+            "signal": "traces",
+            "aggregations": [{"expression": "count()", "alias": "hop_count"}],
+            "filter": {
+                "expression": "name = 'a2a.call' AND agentmesh.src EXISTS AND peer.service EXISTS "
+                "AND gen_ai.conversation.id EXISTS"
+            },
+            "groupBy": [
+                _field("gen_ai.conversation.id"),
+                _field("agentmesh.src"),
+                _field("peer.service"),
+            ],
+            "disabled": False,
+        },
+    }
+
+
+def taint_blast_query() -> dict[str, Any]:
+    """Tainted spans grouped by trace, injection origin, and service (blast radius).
+
+    Presence of the ``agentmesh.taint.origin`` string attribute is the taint marker
+    (a boolean lives in a separate column that the ClickHouse fallback does not read).
+    """
+
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "taint_blast",
+            "signal": "traces",
+            "aggregations": [{"expression": "count()", "alias": "tainted_spans"}],
+            "filter": {
+                "expression": "agentmesh.taint.origin EXISTS AND agentmesh.taint.category EXISTS"
+            },
+            "groupBy": [
+                _field("trace_id"),
+                _field("agentmesh.taint.origin"),
+                _field("agentmesh.taint.category"),
+                _field("service.name", "resource"),
+            ],
+            "disabled": False,
+        },
+    }
+
+
+def active_conversations_query() -> dict[str, Any]:
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "active_conversations",
+            "signal": "traces",
+            "filter": {
+                "expression": "gen_ai.operation.name = 'chat' AND gen_ai.conversation.id EXISTS "
+                "AND agentmesh.cost.direct_usd EXISTS"
+            },
+            "selectFields": [_field("gen_ai.conversation.id"), _field("trace_id")],
+            "disabled": False,
+            "limit": 1000,
+        },
+    }
+
+
+def conversation_cost_query(conversation_id: str) -> dict[str, Any]:
+    escaped = conversation_id.replace("'", "\\'")
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "conversation_cost",
+            "signal": "traces",
+            "aggregations": [{"expression": "sum(agentmesh.cost.direct_usd)", "alias": "cost_usd"}],
+            "filter": {
+                "expression": "gen_ai.operation.name = 'chat' AND agentmesh.cost.direct_usd EXISTS "
+                f"AND gen_ai.conversation.id = '{escaped}'"
+            },
+            "disabled": False,
+        },
+    }
+
+
+def trace_query(trace_id: str) -> dict[str, Any]:
+    escaped = trace_id.replace("'", "\\'")
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "trace_spans",
+            "signal": "traces",
+            "filter": {"expression": f"trace_id = '{escaped}'"},
+            "selectFields": [
+                _field("trace_id"),
+                _field("span_id"),
+                _field("parent_span_id"),
+                _field("timestamp"),
+                _field("name"),
+                _field("service.name", "resource"),
+                _field("gen_ai.conversation.id"),
+                _field("agentmesh.src"),
+                _field("peer.service"),
+                _field("agentmesh.cost.direct_usd"),
+                _field("agentmesh.cost.downstream_usd"),
+                _field("agentmesh.output.flagged"),
+                _field("agentmesh.output.category"),
+                _field("agentmesh.state.hash"),
+                _field("experiment.variant"),
+                _field("experiment.run_id"),
+            ],
+            "disabled": False,
+            "limit": 1000,
+        },
+    }
+
+
+def audit_query(trace_id: str) -> dict[str, Any]:
+    escaped = trace_id.replace("'", "\\'")
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "audit_events",
+            "signal": "logs",
+            "filter": {
+                "expression": (
+                    f"trace_id = '{escaped}' AND (event = 'agent_paused' OR body = 'agent_paused')"
+                )
+            },
+            "selectFields": [
+                _field("trace_id"),
+                _field("body"),
+                _field("event"),
+                _field("conversation_id"),
+                _field("agent"),
+                _field("reason"),
+                _field("alert_name"),
+                _field("enforcement_mode"),
+            ],
+            "disabled": False,
+            "limit": 100,
+        },
+    }
+
+
+# --- AgentLab summary/diff queries -------------------------------------------------
+#
+# One question each, grouped by variant, so the summary/diff CLI works on both the SigNoz
+# Query API (preferred) and the ClickHouse fallback (Community). Span metrics carry the dot
+# key experiment.variant; watcher-signal logs carry underscore experiment_variant; the
+# experiment_run logs carry dot experiment.variant + experiment.status.
+
+
+def experiment_span_metrics_query(
+    experiment_id: str | None = None, run_id: str | None = None
+) -> dict[str, Any]:
+    where = ["gen_ai.operation.name = 'chat'", "experiment.variant EXISTS"]
+    where += _experiment_where(
+        experiment_id, run_id, id_key="experiment.id", run_key="experiment.run_id"
+    )
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "experiment_span_metrics",
+            "signal": "traces",
+            "stepInterval": 30,
+            "aggregations": [
+                {"expression": "sum(agentmesh.cost.direct_usd)", "alias": "cost_usd"},
+                {"expression": "sum(gen_ai.usage.output_tokens)", "alias": "output_tokens"},
+                {"expression": "count()", "alias": "span_count"},
+            ],
+            "filter": {"expression": " AND ".join(where)},
+            "groupBy": [_field("experiment.variant")],
+            "disabled": False,
+        },
+    }
+
+
+def experiment_loop_count_query(
+    experiment_id: str | None = None, run_id: str | None = None
+) -> dict[str, Any]:
+    where = ["body = 'loop_detected'", "experiment_variant EXISTS"]
+    where += _experiment_where(
+        experiment_id, run_id, id_key="experiment_id", run_key="experiment_run_id"
+    )
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "experiment_loop_count",
+            "signal": "logs",
+            "stepInterval": 30,
+            "aggregations": [{"expression": "count()", "alias": "loops"}],
+            "filter": {"expression": " AND ".join(where)},
+            "groupBy": [_field("experiment_variant")],
+            "disabled": False,
+        },
+    }
+
+
+def experiment_breaker_count_query(
+    experiment_id: str | None = None, run_id: str | None = None
+) -> dict[str, Any]:
+    where = ["body = 'edge_unhealthy'", "experiment_variant EXISTS"]
+    where += _experiment_where(
+        experiment_id, run_id, id_key="experiment_id", run_key="experiment_run_id"
+    )
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "experiment_breaker_count",
+            "signal": "logs",
+            "stepInterval": 30,
+            "aggregations": [{"expression": "count()", "alias": "breaker_trips"}],
+            "filter": {"expression": " AND ".join(where)},
+            "groupBy": [_field("experiment_variant")],
+            "disabled": False,
+        },
+    }
+
+
+def experiment_run_count_query(
+    experiment_id: str | None = None, run_id: str | None = None
+) -> dict[str, Any]:
+    where = ["body = 'experiment_run'"]
+    where += _experiment_where(
+        experiment_id, run_id, id_key="experiment.id", run_key="experiment.run_id"
+    )
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "experiment_run_count",
+            "signal": "logs",
+            "stepInterval": 30,
+            "aggregations": [
+                {"expression": "count()", "alias": "runs"},
+                {"expression": "avg(experiment.duration_ms)", "alias": "avg_duration_ms"},
+            ],
+            "filter": {"expression": " AND ".join(where)},
+            "groupBy": [_field("experiment.variant")],
+            "disabled": False,
+        },
+    }
+
+
+def experiment_failure_count_query(
+    experiment_id: str | None = None, run_id: str | None = None
+) -> dict[str, Any]:
+    where = ["body = 'experiment_run'", "experiment.status = 'failed'"]
+    where += _experiment_where(
+        experiment_id, run_id, id_key="experiment.id", run_key="experiment.run_id"
+    )
+    return {
+        "type": "builder_query",
+        "spec": {
+            "name": "experiment_failure_count",
+            "signal": "logs",
+            "stepInterval": 30,
+            "aggregations": [{"expression": "count()", "alias": "failures"}],
+            "filter": {"expression": " AND ".join(where)},
+            "groupBy": [_field("experiment.variant")],
+            "disabled": False,
+        },
+    }
+
+
+class SigNozClient:
+    def __init__(self, url: str, api_key: str, *, client: httpx.Client | None = None) -> None:
+        self.url = url.rstrip("/")
+        self.api_key = api_key
+        self._client = client or httpx.Client(timeout=10.0)
+        self._owns_client = client is None
+
+    def close(self) -> None:
+        if self._owns_client:
+            self._client.close()
+
+    def run_builder_query(
+        self, query: Mapping[str, Any], time_range: TimeRange
+    ) -> list[dict[str, Any]]:
+        spec = query.get("spec", {})
+        request_type = "raw" if isinstance(spec, dict) and "selectFields" in spec else "table"
+        payload = {
+            "start": time_range.start_ms,
+            "end": time_range.end_ms,
+            "requestType": request_type,
+            "variables": {},
+            "compositeQuery": {"queries": [dict(query)]},
+        }
+        try:
+            response = self._client.post(
+                f"{self.url}/api/v5/query_range",
+                headers={"SIGNOZ-API-KEY": self.api_key},
+                json=payload,
+            )
+            response.raise_for_status()
+            body = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise SigNozQueryError(f"SigNoz query failed: {exc}") from exc
+        return self._rows(body)
+
+    def get_trace(self, trace_id: str, time_range: TimeRange | None = None) -> list[dict[str, Any]]:
+        if time_range is None:
+            end_ms = int(time.time() * 1000)
+            time_range = TimeRange(end_ms - 86_400_000, end_ms)
+        return self.run_builder_query(trace_query(trace_id), time_range)
+
+    def get_audit_events(
+        self, trace_id: str, time_range: TimeRange | None = None
+    ) -> list[dict[str, Any]]:
+        if time_range is None:
+            end_ms = int(time.time() * 1000)
+            time_range = TimeRange(end_ms - 86_400_000, end_ms)
+        return self.run_builder_query(audit_query(trace_id), time_range)
+
+    @staticmethod
+    def _rows(body: Any) -> list[dict[str, Any]]:
+        if not isinstance(body, dict):
+            raise SigNozQueryError("SigNoz returned a non-object response")
+        data = body.get("data")
+        candidates = [data, data.get("result") if isinstance(data, dict) else None]
+        for candidate in candidates:
+            if isinstance(candidate, list) and all(isinstance(row, dict) for row in candidate):
+                return candidate
+            if isinstance(candidate, dict):
+                for key in ("rows", "result"):
+                    rows = candidate.get(key)
+                    if isinstance(rows, list) and all(isinstance(row, dict) for row in rows):
+                        return rows
+        raise SigNozQueryError("SigNoz response did not contain object rows")
+
+
+class ClickHouseClient:
+    """Self-hosted, read-only fallback for local SigNoz ClickHouse deployments.
+
+    This is intentionally limited to the query shapes the watcher owns. It does not expose a
+    general SQL execution API and should be reachable only on a private Compose network.
+    """
+
+    _TABLE = "signoz_traces.distributed_signoz_index_v3"
+
+    def __init__(self, url: str, *, client: httpx.Client | None = None) -> None:
+        self.url = url.rstrip("/")
+        self._client = client or httpx.Client(timeout=10.0)
+        self._owns_client = client is None
+
+    def close(self) -> None:
+        if self._owns_client:
+            self._client.close()
+
+    @staticmethod
+    def _filter_expr(spec: Mapping[str, Any]) -> str:
+        filt = spec.get("filter", {})
+        if isinstance(filt, Mapping) and isinstance(filt.get("expression"), str):
+            return filt["expression"]
+        return ""
+
+    @staticmethod
+    def _seconds(time_range: TimeRange) -> str:
+        # SigNoz's ClickHouse build rejects epoch conversion functions at the current
+        # nanosecond scale. The watcher only queries trailing windows, so anchor that
+        # interval on ClickHouse's clock and avoid a lossy client/server clock conversion.
+        window_sec = max(1, (time_range.end_ms - time_range.start_ms + 999) // 1000)
+        return f"timestamp >= now64(9) - toIntervalSecond({window_sec}) AND timestamp <= now64(9)"
+
+    @staticmethod
+    def _seconds_ns(time_range: TimeRange) -> str:
+        # signoz_logs.distributed_logs_v2 stores `timestamp` as a raw UInt64 of nanoseconds,
+        # NOT a DateTime64 like the traces table. Comparing that column against now64(9)
+        # (a DateTime64) silently matches zero rows, so bound the log window in nanoseconds.
+        window_sec = max(1, (time_range.end_ms - time_range.start_ms + 999) // 1000)
+        return (
+            f"timestamp >= toUnixTimestamp64Nano(now64(9)) - {window_sec} * 1000000000 "
+            "AND timestamp <= toUnixTimestamp64Nano(now64(9))"
+        )
+
+    def run_builder_query(
+        self, query: Mapping[str, Any], time_range: TimeRange
+    ) -> list[dict[str, Any]]:
+        spec = query.get("spec", {})
+        if not isinstance(spec, Mapping) or not isinstance(spec.get("name"), str):
+            raise SigNozQueryError("ClickHouse fallback requires a named watcher query")
+        name = spec["name"]
+        sql = self._sql(name, spec, time_range)
+        try:
+            response = self._client.post(
+                f"{self.url}/?default_format=JSONEachRow", content=sql.encode("utf-8")
+            )
+            response.raise_for_status()
+            return [json.loads(line) for line in response.text.splitlines() if line]
+        except (httpx.HTTPError, ValueError) as exc:
+            raise SigNozQueryError(f"ClickHouse watcher query failed: {exc}") from exc
+
+    def get_trace(self, trace_id: str, time_range: TimeRange | None = None) -> list[dict[str, Any]]:
+        if time_range is None:
+            end_ms = int(time.time() * 1000)
+            time_range = TimeRange(end_ms - 86_400_000, end_ms)
+        return self.run_builder_query(trace_query(trace_id), time_range)
+
+    def get_audit_events(
+        self, trace_id: str, time_range: TimeRange | None = None
+    ) -> list[dict[str, Any]]:
+        if time_range is None:
+            end_ms = int(time.time() * 1000)
+            time_range = TimeRange(end_ms - 86_400_000, end_ms)
+        return self.run_builder_query(audit_query(trace_id), time_range)
+
+    def _sql(self, name: str, spec: Mapping[str, Any], time_range: TimeRange) -> str:
+        bounded = self._seconds(time_range)  # traces table (DateTime64 timestamp)
+        bounded_ns = self._seconds_ns(time_range)  # logs table (UInt64 ns timestamp)
+        attrs = "attributes_string"
+        if name == "velocity":
+            return f"""
+                SELECT trace_id, {attrs}['agentmesh.src'] AS `agentmesh.src`,
+                       {attrs}['peer.service'] AS `peer.service`, count() AS hop_count
+                FROM {self._TABLE}
+                WHERE {bounded} AND name = 'a2a.call'
+                  AND mapContains({attrs}, 'agentmesh.src') AND mapContains({attrs}, 'peer.service')
+                GROUP BY trace_id, `agentmesh.src`, `peer.service`
+            """
+        if name == "xconv_velocity":
+            return f"""
+                SELECT {attrs}['gen_ai.conversation.id'] AS `gen_ai.conversation.id`,
+                       {attrs}['agentmesh.src'] AS `agentmesh.src`,
+                       {attrs}['peer.service'] AS `peer.service`, count() AS hop_count
+                FROM {self._TABLE}
+                WHERE {bounded} AND name = 'a2a.call'
+                  AND mapContains({attrs}, 'agentmesh.src')
+                  AND mapContains({attrs}, 'peer.service')
+                  AND mapContains({attrs}, 'gen_ai.conversation.id')
+                GROUP BY `gen_ai.conversation.id`, `agentmesh.src`, `peer.service`
+            """
+        if name == "taint_blast":
+            return f"""
+                SELECT trace_id,
+                       {attrs}['agentmesh.taint.origin'] AS `agentmesh.taint.origin`,
+                       {attrs}['agentmesh.taint.category'] AS `agentmesh.taint.category`,
+                       resources_string['service.name'] AS `service.name`,
+                       count() AS tainted_spans
+                FROM {self._TABLE}
+                WHERE {bounded} AND mapContains({attrs}, 'agentmesh.taint.origin')
+                  AND mapContains({attrs}, 'agentmesh.taint.category')
+                GROUP BY trace_id, `agentmesh.taint.origin`, `agentmesh.taint.category`,
+                         `service.name`
+            """
+        if name == "active_conversations":
+            return f"""
+                SELECT {attrs}['gen_ai.conversation.id'] AS `gen_ai.conversation.id`, trace_id
+                FROM {self._TABLE}
+                WHERE {bounded} AND {attrs}['gen_ai.operation.name'] = 'chat'
+                  AND mapContains({attrs}, 'gen_ai.conversation.id')
+                  AND mapContains(attributes_number, 'agentmesh.cost.direct_usd')
+                GROUP BY `gen_ai.conversation.id`, trace_id
+            """
+        if name == "conversation_cost":
+            expression = spec.get("filter", {})
+            if not isinstance(expression, Mapping) or not isinstance(
+                expression.get("expression"), str
+            ):
+                raise SigNozQueryError("conversation cost query has no filter expression")
+            conversation_id = expression["expression"].rsplit("'", 2)[-2].replace("\\'", "'")
+            escaped = conversation_id.replace("'", "\\'")
+            return f"""
+                SELECT sum(attributes_number['agentmesh.cost.direct_usd']) AS cost_usd
+                FROM {self._TABLE}
+                WHERE {bounded} AND {attrs}['gen_ai.operation.name'] = 'chat'
+                  AND {attrs}['gen_ai.conversation.id'] = '{escaped}'
+            """
+        if name == "trace_spans":
+            expression = spec.get("filter", {})
+            if not isinstance(expression, Mapping) or not isinstance(
+                expression.get("expression"), str
+            ):
+                raise SigNozQueryError("trace query has no filter expression")
+            trace_id = expression["expression"].rsplit("'", 2)[-2].replace("\\'", "'")
+            escaped = trace_id.replace("'", "\\'")
+            return f"""
+                SELECT trace_id, span_id, parent_span_id,
+                       timestamp,
+                       name, resources_string['service.name'] AS serviceName,
+                       attributes_string AS attributes,
+                       attributes_number AS attributes_number
+                FROM {self._TABLE}
+                WHERE {bounded} AND trace_id = '{escaped}'
+                ORDER BY timestamp, span_id
+            """
+        if name == "audit_events":
+            expression = spec.get("filter", {})
+            if not isinstance(expression, Mapping) or not isinstance(
+                expression.get("expression"), str
+            ):
+                raise SigNozQueryError("audit query has no filter expression")
+            trace_id = expression["expression"].split("'", 2)[1].replace("\\'", "'")
+            escaped = trace_id.replace("'", "\\'")
+            return f"""
+                SELECT trace_id, body, attributes_string AS attributes
+                FROM signoz_logs.distributed_logs_v2
+                WHERE trace_id = '{escaped}' AND body = 'agent_paused'
+                ORDER BY timestamp
+            """
+        if name == "experiment_span_metrics":
+            expr = self._filter_expr(spec)
+            extra = self._experiment_extra(
+                expr, attrs, id_key="experiment.id", run_key="experiment.run_id"
+            )
+            return f"""
+                SELECT {attrs}['experiment.variant'] AS `experiment.variant`,
+                       sumIf(attributes_number['agentmesh.cost.direct_usd'],
+                             {attrs}['gen_ai.operation.name'] = 'chat') AS cost_usd,
+                       sumIf(attributes_number['gen_ai.usage.output_tokens'],
+                             {attrs}['gen_ai.operation.name'] = 'chat') AS output_tokens,
+                       uniqExact(resources_string['service.name']) AS agent_count
+                FROM {self._TABLE}
+                WHERE {bounded} AND mapContains({attrs}, 'experiment.variant'){extra}
+                GROUP BY `experiment.variant`
+            """
+        if name in ("experiment_loop_count", "experiment_breaker_count"):
+            body = "loop_detected" if name == "experiment_loop_count" else "edge_unhealthy"
+            alias = "loops" if name == "experiment_loop_count" else "breaker_trips"
+            expr = self._filter_expr(spec)
+            extra = self._experiment_extra(
+                expr, "attributes_string", id_key="experiment_id", run_key="experiment_run_id"
+            )
+            return f"""
+                SELECT attributes_string['experiment_variant'] AS `experiment_variant`,
+                       count() AS {alias}
+                FROM signoz_logs.distributed_logs_v2
+                WHERE {bounded_ns} AND body = '{body}'
+                  AND mapContains(attributes_string, 'experiment_variant'){extra}
+                GROUP BY `experiment_variant`
+            """
+        if name == "experiment_run_count":
+            expr = self._filter_expr(spec)
+            extra = self._experiment_extra(
+                expr, "attributes_string", id_key="experiment.id", run_key="experiment.run_id"
+            )
+            return f"""
+                SELECT attributes_string['experiment.variant'] AS `experiment.variant`,
+                       count() AS runs,
+                       avg(attributes_number['experiment.duration_ms']) AS avg_duration_ms
+                FROM signoz_logs.distributed_logs_v2
+                WHERE {bounded_ns} AND body = 'experiment_run'{extra}
+                GROUP BY `experiment.variant`
+            """
+        if name == "experiment_failure_count":
+            expr = self._filter_expr(spec)
+            extra = self._experiment_extra(
+                expr, "attributes_string", id_key="experiment.id", run_key="experiment.run_id"
+            )
+            return f"""
+                SELECT attributes_string['experiment.variant'] AS `experiment.variant`,
+                       count() AS failures
+                FROM signoz_logs.distributed_logs_v2
+                WHERE {bounded_ns} AND body = 'experiment_run'
+                  AND attributes_string['experiment.status'] = 'failed'{extra}
+                GROUP BY `experiment.variant`
+            """
+        raise SigNozQueryError(f"unsupported ClickHouse watcher query: {name}")
+
+    @staticmethod
+    def _experiment_extra(expression: str, attrs_map: str, *, id_key: str, run_key: str) -> str:
+        """Rebuild the optional experiment.id / run_id filter as a ClickHouse map lookup."""
+
+        extra = ""
+        experiment_id = _extract_eq(expression, id_key)
+        run_id = _extract_eq(expression, run_key)
+        if experiment_id:
+            extra += f" AND {attrs_map}['{id_key}'] = '{_escape(experiment_id)}'"
+        if run_id:
+            extra += f" AND {attrs_map}['{run_key}'] = '{_escape(run_id)}'"
+        return extra

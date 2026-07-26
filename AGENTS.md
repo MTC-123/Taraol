@@ -1,33 +1,37 @@
-# AGENTS.md — Agent Mesh Radar
+# AGENTS.md — taraol
 
-Multi-agent OpenTelemetry demo. Each agent is its own OTel service; the agent-to-agent
-topology renders automatically in SigNoz's Service Map. We add cost-per-edge, loop
-detection, alerts that pause a runaway agent, and an MCP "explain this loop" tool.
+Drop-in OpenTelemetry instrumentation for multi-agent systems, shipped as a pip package.
+Any Python agent gets gen_ai-semconv spans, cross-process `traceparent`, cost rollup, and
+the analysis/enforcement toolkit (loop + injection + breaker + provenance) in ~3 lines. The
+kit is the product; `demos/research_mesh/` is a reference app built on it.
+
+## Layout
+- `src/taraol/` — the package. Core (flat): `setup`, `facade`, `config`, `semconv`,
+  `attributes`, `cost`, `propagation`, `events`, `capture`, `replay`, `cycle`, `breaker`,
+  `taint`, `provenance`, `guardrail`, `quality`, `llm`, `assets`, `cli`, `experiments`
+  (AgentLab builder/decorators), `experiment_report` (summary/diff read path, lazy `[detection]`).
+  Optional subpackages (extras): `integrations/a2a` `[a2a]`, `detection/` `[detection]`,
+  `mcp/` `[mcp]`, `tools/search.py` `[search]`. Bundled assets in `data/`.
+- `demos/research_mesh/` — a 5-agent app + its SigNoz Foundry deploy + `compose.yaml`.
+- `tests/` — offline unit tests (in-memory exporter, fake LLM/search).
 
 ## Commands
-- Start full stack:  `make up`      (SigNoz + collector + agents)
-- Stop + wipe:       `make down`
-- Tests:             `make test`    (pytest)
-- Lint / format:     `make lint` / `make fmt`
-- Run the demo:      `make demo`
-
-## Architecture — THREE LAYERS, do not cross-import
-- `agents/`     instrumented demo (one sub-package per agent = one `service.name`)
-- `detection/`  loop/budget watcher + controller (reads SigNoz, never imports agents)
-- `mcp_tool/`   "explain this loop" over the SigNoz MCP server
-Shared helpers live in `src/amr/`. Layers talk only via OTLP/HTTP/SigNoz.
+- Tests:   `uv run pytest`         (offline; fake providers, default settings)
+- Lint:    `uv run ruff check .` / `uv run ruff format .`
+- Build:   `uv build`              (wheel + sdist; data files ship)
+- Example: `docker compose -f demos/research_mesh/compose.yaml up -d --build`
 
 ## Non-negotiable rules
-- Every agent process sets a DISTINCT `OTEL_SERVICE_NAME`.
-- Sampler MUST be `ParentBased` (never independent head sampling) — else the mesh breaks.
-- On each agent-to-agent hop: INJECT W3C traceparent on send, EXTRACT on receive.
-- GenAI spans use `gen_ai.*` semconv; opt in with
-  `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`.
-- Never commit secrets. `.env` is git-ignored; update `.env.example` when adding vars.
-- Create SigNoz alerts via the UI or Terraform provider, NOT raw API POSTs.
+- **Content-free by default.** No prompt/output/tool text is captured unless
+  `OAK_CAPTURE_CONTENT` is on; captured text is always truncated with a marker. Keep the
+  default path emitting zero content (a test asserts `gen_ai.input.messages` is absent).
+- **`gen_ai.*` keys are vendor-neutral — never namespaced.** Project attributes go through
+  `attributes.AttrNames` (default namespace `agentmesh`).
+- Sampler is `ParentBased`; inject/extract W3C traceparent on every hop.
+- Core install stays minimal (otel + pyyaml). Web deps live in extras only.
+- Env vars are `OAK_*`; never commit secrets; update `.env.example` when adding one.
 
 ## Conventions
 - Python 3.12, `uv`, `ruff`, `pytest`. Line length 100.
-- One task = one commit. Tests must pass before commit.
-
-
+- One task = one commit. Tests pass before commit.
+- New reusable capability → the kit; demo-specific usage → the example app.

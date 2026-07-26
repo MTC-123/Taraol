@@ -1,0 +1,63 @@
+"""Settings for the kit — all previously hard-coded values, now parameterized.
+
+Zero-config defaults make the 3-line path work with no environment variables; every
+value is overridable via ``instrument(...)`` keyword args, a :class:`Settings`
+instance, or ``OAK_*`` / standard ``OTEL_*`` environment variables.
+"""
+
+import os
+from dataclasses import dataclass, replace
+from pathlib import Path
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "on", "yes"}
+
+
+@dataclass(frozen=True, slots=True)
+class Settings:
+    service_name: str
+    service_namespace: str = "agents"
+    attr_namespace: str = "agentmesh"
+    provider_name: str = "unknown"
+    exporter: str = "grpc"  # "grpc" | "http"
+    endpoint: str | None = None  # else OTEL_EXPORTER_OTLP_ENDPOINT
+    enable_logs: bool = True
+    pricing_path: str | Path | None = None  # else the bundled default table
+    # Opt-in LangSmith-style content capture. Default OFF: no prompt/output/tool text is
+    # ever recorded. When on, captured text is truncated to content_max_chars per field.
+    capture_content: bool = False
+    content_max_chars: int = 12000
+    # AgentLab experiment tags. Default None: no experiment.* attribute is emitted unless an
+    # experiment is active (env below, or the Experiment builder / decorators at runtime).
+    experiment_id: str | None = None
+    experiment_variant: str | None = None
+    experiment_run_id: str | None = None
+
+    @classmethod
+    def from_env(cls, service_name: str | None = None, **overrides: object) -> "Settings":
+        name = (
+            service_name or os.environ.get("OTEL_SERVICE_NAME") or overrides.get("service_name")  # type: ignore[assignment]
+        )
+        if not name:
+            raise ValueError("service_name is required (or set OTEL_SERVICE_NAME)")
+        base = cls(
+            service_name=str(name),
+            service_namespace=os.environ.get("OAK_SERVICE_NAMESPACE", "agents"),
+            attr_namespace=os.environ.get("OAK_ATTR_NAMESPACE", "agentmesh"),
+            provider_name=os.environ.get("OAK_PROVIDER_NAME", "unknown"),
+            exporter=os.environ.get("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc").split("/")[0].lower()
+            if os.environ.get("OTEL_EXPORTER_OTLP_PROTOCOL")
+            else "grpc",
+            endpoint=os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"),
+            pricing_path=os.environ.get("OAK_PRICING_FILE"),
+            capture_content=_env_flag("OAK_CAPTURE_CONTENT")
+            or _env_flag("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"),
+            content_max_chars=int(os.environ.get("OAK_CONTENT_MAX_CHARS", "12000")),
+            experiment_id=os.environ.get("OAK_EXPERIMENT_ID") or None,
+            experiment_variant=os.environ.get("OAK_EXPERIMENT_VARIANT") or None,
+            experiment_run_id=os.environ.get("OAK_EXPERIMENT_RUN_ID") or None,
+        )
+        # Keyword overrides win over environment.
+        clean = {k: v for k, v in overrides.items() if k != "service_name" and v is not None}
+        return replace(base, **clean) if clean else base

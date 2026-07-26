@@ -13,9 +13,8 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
-      - run: uv sync --locked --all-groups
+      - run: uv sync --all-extras --group dev
       - run: uv run ruff check .
-      - run: uv run mypy . || true
+      - run: uv run ruff format --check .
       - run: uv run pytest
-
-
+      - run: uv build
