@@ -273,9 +273,19 @@ class Experiment:
         self._variants.append(Variant(name, {**dict(config or {}), **knobs}))
         return self
 
-    def compare(self, *variants: "Variant | str") -> "Experiment":
-        """Alias for repeated ``.variant(...)`` — reads nicely: ``.compare(baseline, runaway)``."""
+    def compare(self, *variants: "Variant | str", **knobs: Any) -> "Experiment":
+        """Alias for ``.variant(...)`` that reads as the intent.
 
+        Two forms::
+
+            .compare("terse", prompt="...")     # one arm with its knobs (== .variant)
+            .compare(baseline, runaway, "v3")   # several prebuilt arms / bare names
+        """
+
+        if knobs:
+            if len(variants) != 1 or not isinstance(variants[0], str):
+                raise TypeError("compare() with knobs takes exactly one variant name")
+            return self.variant(variants[0], **knobs)
         for v in variants:
             if isinstance(v, Variant):
                 self._variants.append(v)

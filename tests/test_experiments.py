@@ -95,6 +95,15 @@ def test_compare_alias_matches_repeated_variant() -> None:
     assert [v.name for v in e._variants] == ["a", "b"]
 
 
+def test_compare_with_knobs_is_variant() -> None:
+    _install()
+    e = Experiment("e").compare("terse", prompt="one sentence").compare("verbose", prompt="3 par")
+    assert [v.name for v in e._variants] == ["terse", "verbose"]
+    assert e._variants[0].prompt == "one sentence"
+    with pytest.raises(TypeError, match="exactly one"):
+        Experiment("e2").compare("a", "b", prompt="x")
+
+
 def test_run_without_variants_raises() -> None:
     _install()
     with pytest.raises(ValueError, match="variant"):
