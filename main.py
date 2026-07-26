@@ -1,20 +1,20 @@
 """Real integration test: taraol against live Gemini + a running SigNoz.
 
-Decorator-style instrumentation (the 3-decorator DX) end to end —
-  @agent / @chat wrap the plain functions below; record_chat / record_chat_content
-  attach tokens + opt-in content from inside
-  -> an AgentLab experiment: a terse-vs-verbose prompt A/B, plus one intentionally
-     broken variant (unknown prompt style -> KeyError) to prove failure-capture.
-Every span carries experiment.id / variant / run_id; each variant also emits one
-experiment_run log (status + duration).
+The 2-decorator DX, end to end. ``@chat`` extracts tokens + cost from the returned SDK
+response automatically (google-genai / OpenAI / Anthropic shapes) — the only explicit
+telemetry call left is ``record_chat_content``, because content capture is opt-in by design.
 
-Then read it back (the run_id is printed below):
+The AgentLab experiment: a terse-vs-verbose prompt A/B, plus one intentionally broken
+variant (unknown prompt style -> KeyError) to prove failure-capture. Every span carries
+experiment.id / variant / run_id; each variant also emits one experiment_run log.
+
+Read it back (the run_id is printed below):
 
     SIGNOZ_CLICKHOUSE_URL=http://localhost:8123 taraol experiment summary prompt-style-ab --run <run_id>
 
-Needs a running SigNoz and GEMINI_API_KEY (or GOOGLE_API_KEY) in .env.
-Dynamic per-call model/conversation ids need the context-manager form; decorators fix
-them at decoration time — that is the one trade-off of the sugar.
+Needs a running SigNoz, GEMINI_API_KEY (or GOOGLE_API_KEY), and
+OTEL_EXPORTER_OTLP_ENDPOINT in .env — no endpoint is hardcoded here, so the same file
+runs against local SigNoz, a team server, or SigNoz Cloud unchanged.
 """
 
 import os
@@ -22,7 +22,7 @@ import os
 from dotenv import load_dotenv
 from google import genai
 
-from taraol import Experiment, Variant, agent, chat, instrument, record_chat, record_chat_content
+from taraol import Experiment, Variant, agent, chat, instrument, record_chat_content
 
 load_dotenv()
 
@@ -33,8 +33,7 @@ EXPERIMENT_ID = "prompt-style-ab"
 
 client = genai.Client(api_key=API_KEY)
 
-# gRPC OTLP to a local SigNoz (:4317); capture_content=True opts into prompt/completion capture.
-instrument("assistant", capture_content=True, endpoint="http://localhost:4317")
+instrument("assistant", capture_content=True)  # endpoint comes from the environment
 
 QUESTION = "Explain what OpenTelemetry is."
 PROMPTS = {
@@ -43,19 +42,16 @@ PROMPTS = {
 }
 
 
-@chat(MODEL)  # chat span: tokens + cost rollup + captured content
-def think(prompt: str) -> str:
+@chat(MODEL)  # tokens + cost auto-extracted from the returned response
+def think(prompt: str):
     response = client.models.generate_content(model=MODEL, contents=prompt)
-    usage = response.usage_metadata
-    record_chat(input_tokens=usage.prompt_token_count, output_tokens=usage.candidates_token_count)
-    record_chat_content(prompt=prompt, completion=response.text)
-    return response.text
+    record_chat_content(prompt=prompt, completion=response.text)  # content is opt-in
+    return response
 
 
 @agent(name="assistant")  # invoke_agent span around the step; experiment tags ride along
 def ask(variant: Variant) -> None:
-    prompt = PROMPTS[variant.config["style"]]  # "broken" has no such style -> KeyError
-    text = think(prompt)
+    text = think(PROMPTS[variant.style]).text  # "broken" has no such style -> KeyError
     print(f"[{variant.name:7}] {text[:70].strip()}...")
 
 

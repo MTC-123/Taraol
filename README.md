@@ -31,23 +31,25 @@ taraol signoz up      # local SigNoz (UI :8080, OTLP :4317); `signoz down` to wi
 Drop three decorators on the functions you already have:
 
 ```python
-from taraol import instrument, agent, chat, tool, record_chat
+from taraol import instrument, agent, chat, tool
 
 instrument("planner")                         # OTel wired, zero config
 
 @tool                                         # execute_tool span
 def search(query): ...
 
-@chat("gemini-2.5-flash")                     # chat span + cost rollup
+@chat("gemini-2.5-flash")                     # chat span; tokens + cost auto-extracted
 def think(prompt):
-    reply = model.generate(prompt)            # your LLM SDK
-    record_chat(input_tokens=reply.usage.input, output_tokens=reply.usage.output)
-    return reply.text
+    return client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
 
 @agent(name="planner")                        # invoke_agent span around the step
 def plan(task):
-    return think(search(task))
+    return think(search(task)).text
 ```
+
+Return the raw SDK response from a `@chat` function and usage/cost are read off it
+automatically (google-genai, OpenAI-compatible, Anthropic shapes); `record_chat(...)` remains
+for streaming/custom cases.
 
 `instrument()` installs one `ParentBased(ALWAYS_ON)` provider, a batching OTLP exporter, W3C
 trace-context + baggage propagation, and the bundled price table. Agents that propagate
