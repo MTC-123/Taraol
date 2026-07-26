@@ -1,10 +1,10 @@
 """One research-mesh agent, built entirely on taraol.
 
-This app deliberately uses the kit's *context-manager* tier, not the @agent/@chat
-decorators from the quickstarts (main.py / main_2.py): a distributed agent needs
-per-request conversation ids, span handles for taint marking and state hashes, and a
-custom LLM client — the fine-control cases the CM API exists for. Same spans, same
-telemetry; pick the tier that fits.
+The LLM and web-search steps use the @chat/@tool decorators — usage, cost, and opted-in
+content are read off the returned result automatically. The per-request *root* span stays
+a context manager (`kit.agent(name, conversation_id)`): a distributed agent gets its
+conversation id from the incoming payload and stamps state hashes / output flags on the
+span handle — the fine-control case the CM tier exists for. Same spans either way.
 
 The researcher does a real web search (Tavily/fake). Agent output is threaded to the
 next agent (a genuine A→B→C pipeline); prompts/outputs/tool-I/O are captured on spans
@@ -14,6 +14,7 @@ breaker exactly as the library intends.
 
 import contextlib
 import hashlib
+import json
 import logging
 import os
 import re
@@ -22,7 +23,7 @@ from uuid import uuid4
 
 from opentelemetry import trace
 
-from taraol import ExperimentContext, instrument, llm, use_experiment
+from taraol import ExperimentContext, chat, instrument, llm, tool, use_experiment
 from taraol.attributes import attrs
 from taraol.guardrail import INPUT, OUTPUT, scan
 from taraol.integrations.a2a import A2AClient, A2AError, EdgeBrokenError, create_app, run
@@ -60,6 +61,18 @@ def _prompt(name: str, hops: int, user_input: str, upstream: str, context: str) 
 
 
 def register_agent(kit, server, name: str) -> None:
+    @chat(MODEL)  # usage + cost + opted-in content read off the returned LLMResult
+    def complete(prompt: str) -> llm.LLMResult:
+        result = llm.complete(prompt, MODEL)
+        verdict = _scan_boundary(prompt, result.text)
+        if verdict.flagged:
+            kit.mark_injection(verdict.category)  # taint the chat span as the origin
+        return result
+
+    @tool(name="search_sources")  # the JSON return is captured as the tool result
+    def search_sources(query: str) -> str:
+        return search.hits_to_json(search.web_search(query, max_results=3))
+
     def work(payload: dict[str, Any]) -> dict[str, Any]:
         conversation_id = str(payload.get("conversation_id") or uuid4())
         hops = int(payload.get("hops", 0))
@@ -90,24 +103,16 @@ def register_agent(kit, server, name: str) -> None:
             context = ""
             if name == "researcher":
                 query = user_input or "recent developments"
-                with kit.tool("search_sources", arguments=query) as tool:
-                    hits = search.web_search(query, max_results=3)
-                    tool.set_result(search.hits_to_json(hits))
-                context = " ".join(h.snippet for h in hits)
+                context = " ".join(
+                    hit.get("snippet", "") for hit in json.loads(search_sources(query))
+                )
 
             prompt = _prompt(name, hops, user_input, upstream, context)
-            with kit.chat(MODEL) as chat:
-                result = llm.complete(prompt, MODEL)
-                chat.record(
-                    input_tokens=result.input_tokens,
-                    output_tokens=result.output_tokens,
-                    finish_reason=result.finish_reason,
-                )
-                chat.record_content(prompt=prompt, completion=result.text)  # opt-in
-                verdict = _scan_boundary(prompt, result.text)
-                local_taint = Taint(verdict.category, name, 0) if verdict.flagged else None
-                if local_taint is not None:
-                    mark_taint(chat.span, local_taint, NAMES)
+            result = complete(prompt)
+            # complete() marked the chat span; recompute the (cheap, regex) verdict here to
+            # decide whether the downstream delegation runs inside a taint scope.
+            verdict = _scan_boundary(prompt, result.text)
+            local_taint = Taint(verdict.category, name, 0) if verdict.flagged else None
 
             a_span.set_attribute(NAMES.state_hash, _state_hash(result.text))
             quality = scan_output(result.text)
