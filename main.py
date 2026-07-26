@@ -32,9 +32,9 @@ def ask(ctx) -> None:
 
 result = (
     Experiment("docs-assistant", description="terse vs verbose prompt", author="Fraol")
-    .variant("terse", prompt="Explain what OpenTelemetry is in exactly one sentence.")
-    .variant("verbose", prompt="Explain what OpenTelemetry is in three detailed paragraphs.")
-    .variant("broken")  # owns no prompt -> AttributeError; the run continues
+    .compare("terse", prompt="Explain what OpenTelemetry is in exactly one sentence.")
+    .compare("verbose", prompt="Explain what OpenTelemetry is in three detailed paragraphs.")
+    .compare("broken")  # owns no prompt -> AttributeError; the run continues
     .run(ask)
 )
 
