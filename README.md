@@ -182,17 +182,18 @@ optional extras (`[a2a]`, `[detection]`, `[mcp]`, `[search]`), content-free by d
 
 ---
 
-## Examples — a ladder from one agent to a distributed mesh
+## Examples — from a single process to a distributed mesh
 
 | demo | scale | shows |
 |---|---|---|
-| [`main.py`](main.py) | 1 agent, 1 process | quickstart + terse-vs-verbose prompt experiment |
-| [`main_2.py`](main_2.py) | 3 agents, 1 process | revision loop → breaker; guardrail catches injection |
-| [`demos/trip_planner/`](demos/trip_planner/) | 4 agents, 1 process | a real-life app on the decorator tier |
-| [`demos/research_mesh/`](demos/research_mesh/) | **5 services, containers** | cross-process traces, Service Map, watcher detection, alert → controller, Foundry deploy |
+| [`demos/trip_planner/`](demos/trip_planner/) | 4 agents, 1 process | decorator-tier quickstart · prompt/budget experiment · revision loop → breaker · guardrail catches injection |
+| [`demos/research_mesh/`](demos/research_mesh/) | **5 services, containers** | cross-process traces · Service Map · watcher loop detection · alert → controller enforcement · Foundry deploy |
 
 ```bash
-# the distributed story, one command:
+# single-process demo — real Gemini, one command:
+uv run python demos/trip_planner/app.py
+
+# the distributed story:
 docker compose -f demos/research_mesh/compose.yaml up -d --build
 docker exec research-mesh-planner-1 python -m research_mesh.experiment
 ```

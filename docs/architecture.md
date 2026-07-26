@@ -35,9 +35,9 @@ tokens, cost, and (opted-in) content straight off the returned SDK response.
 For fine control: per-request conversation ids, span handles for taint marking and state
 hashes, streaming, custom LLM clients. Same spans, same telemetry.
 
-The quickstarts (`main.py`, `main_2.py`, `demos/trip_planner/`) use the decorator tier; the
-distributed mesh (`demos/research_mesh/`) uses decorators for chat/tool and the CM tier for its
-per-request root span. Pick the tier that fits.
+The single-process demo (`demos/trip_planner/`) uses the decorator tier; the distributed mesh
+(`demos/research_mesh/`) uses decorators for chat/tool and the CM tier for its per-request root
+span. Pick the tier that fits.
 
 ## Package layout
 
