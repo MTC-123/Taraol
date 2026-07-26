@@ -1,63 +1,151 @@
-# taraol
+# Taraol
 
-**Drop-in OpenTelemetry for multi-agent systems — and AgentLab, the experiment layer that
-tells you which agent design to deploy.** Any Python agent gets gen_ai-semconv spans,
-cross-process `traceparent`, cost rollup, a live SigNoz topology, and a self-defense toolkit
-(runaway-loop detection, per-edge circuit breaker, injection taint, bad-output provenance) —
-from two decorators. Framework-neutral, **private by default**.
+> **Observe, debug, defend, and improve AI agents with SigNoz.**
 
-> Built for the "Agents of SigNoz" hackathon. Everything below is live-verified against a
-> real SigNoz + real Gemini.
+Taraol is an **OpenTelemetry-native observability framework for AI agents**. With only **two
+decorators**, any Python agent becomes observable, experimentable, and self-defending — traces,
+token/cost tracking, a live Service Map, operational experiments, loop detection, and circuit
+breakers — all inside **SigNoz**, with no custom UI.
 
-![taraol Service Map in SigNoz — planner → researcher → writer → critic → router, five services reconstructed from cross-process traceparent](docs/service-map.png)
+Framework-neutral, vendor-neutral, **private by default**. Built for the **Agents of SigNoz
+Hackathon**; every number and screenshot below is from a real, live-verified run.
 
-## Install
+![Taraol Service Map in SigNoz — planner → researcher → writer → critic → router, five services reconstructed from cross-process traceparent](docs/service-map.png)
 
-```sh
-pip install taraol            # core: OTel SDK + gRPC OTLP + pyyaml
-pip install "taraol[all]"     # + a2a, detection, mcp, search, llm, http extras
+---
+
+## The problem
+
+Modern AI apps are no longer a single prompt — they're **teams of collaborating agents**. And
+they fail in ways normal software doesn't:
+
+- two agents get stuck **revising each other forever** — every loop is a real LLM bill;
+- a poisoned document **injects instructions** that spread silently to every downstream agent;
+- in a distributed system, **no single agent can see the problem** — only the telemetry can.
+
+And a second question: with two prompts, two models, or two workflow designs — **which one
+should I actually deploy?** Not which writes nicer text; which is cheaper, faster, and safer.
+
+Traditional observability answers infrastructure questions. LLM-eval tools answer quality
+questions. **Neither explains how the whole agent system behaves.** That's what Taraol solves —
+in four verbs:
+
+| | |
+|---|---|
+| **Observe** | every agent, tool, model call, token, and cost becomes an OpenTelemetry trace in SigNoz |
+| **Debug** | replay any conversation — prompts, completions, tool I/O — from telemetry |
+| **Defend** | detect runaway loops, injection spread, and budget burn; cut them with circuit breakers |
+| **Improve** | AgentLab compares agent designs on real telemetry and tells you which to ship |
+
+---
+
+## Features
+
+- 🔍 **End-to-end distributed tracing** — gen_ai semantic conventions, W3C traceparent across
+  processes and machines.
+- 🗺️ **Live Service Map** — the real topology, drawn by SigNoz from traces. No diagram to
+  maintain.
+- 💰 **Automatic token & cost tracking** — read straight off the returned SDK response
+  (google-genai, OpenAI-compatible, Anthropic, flat shapes).
+- 🧠 **Prompt & response replay** — `taraol explain <trace> --replay`; opt-in, private by
+  default.
+- 🧪 **AgentLab** — compare variants on cost / latency / loops / breaker trips / failures.
+  [Learn more →](docs/agentlab.md)
+- 🛡️ **Self-defending mesh** — loop detection, per-edge circuit breakers, injection taint,
+  provenance, alert → enforcement. [Learn more →](docs/self-defense.md)
+- ☁️ **Vendor-neutral** — plain OpenTelemetry; send to SigNoz today, any OTel backend tomorrow.
+- 📦 **Reproducible backend** — one command boots a Foundry-deployed SigNoz.
+  [Learn more →](docs/foundry.md)
+
+---
+
+## Quick start
+
+```bash
+pip install "taraol[all]"     # core is just `pip install taraol`
+taraol signoz up              # local SigNoz (UI :8080, OTLP :4317) — or point at SigNoz Cloud
 ```
 
-**Backend:** point `OTEL_EXPORTER_OTLP_ENDPOINT` at any SigNoz (Cloud or self-hosted), or boot
-one locally — the wheel ships a reproducible Foundry deploy:
-
-```sh
-taraol signoz up      # local SigNoz (UI :8080, OTLP :4317); `signoz down` to wipe
-```
-
-## Two decorators are the instrumentation
+Instrument any agent with decorators — the function body stays your normal SDK call:
 
 ```python
-from taraol import instrument, agent, chat, tool
+from taraol import instrument, agent, chat
 
-instrument("planner")                         # OTel wired, zero config
-
-@tool                                         # execute_tool span; str return captured
-def search(query): ...
+instrument("assistant")
 
 @chat("gemini-2.5-flash")                     # tokens + cost read off the returned response
 def think(prompt):
     return client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
 
-@agent(name="planner")                        # invoke_agent span around the step
-def plan(task):
-    return think(search(task)).text
+@agent(name="assistant")                      # invoke_agent span around the step
+def answer(question):
+    return think(question).text
 ```
 
-Return the raw SDK response from a `@chat` function and usage + cost are extracted
-automatically (google-genai, OpenAI-compatible, Anthropic, and flat result shapes). Agents that
-propagate `traceparent` render as the live **Service Map** above. Need per-request control
-(dynamic conversation ids, span handles)? The context-manager tier does the same:
-`with kit.agent("planner", conversation_id), kit.chat(model) as c: ...` — see the mesh demo.
+That's the entire integration — no SDK wrappers, no monkey patching, no framework lock-in.
+Content capture is **off by default**; opt in with `instrument(..., capture_content=True)` to
+record prompts/completions under standard `gen_ai.*` keys. Need per-request control (dynamic
+conversation ids, span handles, streaming)? The context-manager tier does the same —
+[architecture →](docs/architecture.md).
 
-## Private by default, inspectable on demand
+---
 
-No prompt/output/tool text is ever captured unless you opt in (`OAK_CAPTURE_CONTENT=on`).
-Opted in, `@chat` captures prompt + completion off the function automatically
-(`gen_ai.input/output.messages`, truncated, standard semconv) — and the replay renders any
-trace as readable text:
+## AgentLab — which design should I deploy?
 
-```sh
+Compare variants of the same workload on **operational** telemetry, not answer quality:
+
+```python
+from taraol import Experiment
+
+(Experiment("docs-assistant", author="Fraol")
+    .compare("terse",   prompt="Explain OpenTelemetry in exactly one sentence.")
+    .compare("verbose", prompt="Explain OpenTelemetry in three detailed paragraphs.")
+    .compare("broken")                    # a failing variant is recorded, not fatal
+    .run(answer))                         # runs once per variant, one shared run_id
+```
+
+Every span is tagged with the experiment + variant, so **SigNoz becomes the experiment
+dashboard** (one ships in the package):
+
+![AgentLab experiment-comparison dashboard in SigNoz — P95 latency, direct LLM cost, and output tokens split by experiment.variant](docs/agentlab-dashboard.png)
+
+Or read it from the terminal — a real run on the distributed mesh (live Gemini):
+
+```
+$ taraol experiment summary converge-vs-runaway --run <run_id>
+
+variant       cost$   tokens  agents   avg ms  loops  breakers  fails  health
+baseline     0.0116     4127       5    42460      0         0      0    91.5
+runaway      0.0266     9457       5   130972      1         1      0    58.8
+
+Highest Operational Health: baseline
+```
+
+The runaway variant cost 2.3× and ran 3× longer — and the **loops / breakers** columns come
+from the watcher detecting the storm *in telemetry*. Full details, hierarchy, and the pluggable
+health score: [AgentLab →](docs/agentlab.md).
+
+---
+
+## Self-defending mesh
+
+```
+   Agents ──> OpenTelemetry ──> SigNoz ──> Watcher ──> Controller
+                                              │            │
+                                       loop_detected   pause agent
+                                       edge_unhealthy  break edge
+```
+
+The `[detection]` extra ships a **watcher** that flags runaway loops, unhealthy edges, budget
+breaches, and injection blast-radius **from telemetry**, and a **controller** that turns a
+SigNoz alert into enforcement — pause the agent, trip a per-edge breaker, write a
+trace-correlated audit event. [How it works →](docs/self-defense.md)
+
+---
+
+## Debug — replay any conversation
+
+```bash
 taraol explain <trace-id> --replay
 ```
 ```
@@ -67,106 +155,84 @@ taraol explain <trace-id> --replay
     tool search_sources: -> [3 results]
 ```
 
-The same chain in SigNoz — the full planner → researcher → writer → critic hop tree, with the
-captured prompt on the selected chat span:
+The same chain in SigNoz — flame graph, waterfall across five services, and the captured prompt
+on the selected span:
 
-![A research-mesh trace in SigNoz: flame graph + waterfall across five services, gen_ai.input/output.messages visible on the selected chat span](docs/mesh-trace.png)
+![A research-mesh trace in SigNoz: flame graph + waterfall across five services, gen_ai.input/output.messages on the selected chat span](docs/mesh-trace.png)
 
-## AgentLab — compare AI agent variants with one function call
+---
 
-Which prompt, model, or workflow is cheaper, faster, and *safer to run*? AgentLab tags every
-span + signal with `experiment.id` / `variant` / `run_id`, fires the same workload once per
-variant, and compares them on real telemetry — cost, latency, tokens, **runaway loops, breaker
-trips, failures** — not answer quality. **SigNoz is the dashboard.**
+## Architecture
 
 ```
-variant A ─┐                           cost · latency · tokens
-variant B ─┼─ AgentLab run ──> SigNoz ── loops · breakers · fails ──> pick the safest
-variant C ─┘  (one run_id)             dashboard + summary CLI
+        Application ──▶ @agent / @chat / @tool ──▶ Taraol SDK
+                                                       │
+                          OpenTelemetry (traceparent, gen_ai semconv, OTLP)
+                                                       │
+                                                     SigNoz
+                                          ┌────────────┴───────────┐
+                                    Dashboards / UI        Query API / ClickHouse
+                                                                    │
+                                                    Watcher ──▶ Controller
 ```
 
-```python
-from taraol import Experiment
+Two instrumentation tiers (decorators for the common path, context managers for fine control),
+optional extras (`[a2a]`, `[detection]`, `[mcp]`, `[search]`), content-free by default, standard
+`gen_ai.*` keys never namespaced. [Full architecture →](docs/architecture.md)
 
-(Experiment("docs-assistant", description="terse vs verbose prompt", author="Fraol")
-    .compare("terse",   prompt="Explain OpenTelemetry in exactly one sentence.")
-    .compare("verbose", prompt="Explain OpenTelemetry in three detailed paragraphs.")
-    .compare("broken")                        # a failing variant is recorded, not fatal
-    .run(ask))                                # ask(ctx) runs once per variant
-```
+---
 
-One `.run()` = one shared `run_id` (Experiment → Run → Variant → Trace), so repeated runs never
-blur. Compare in the terminal or import the bundled **experiment-comparison** dashboard:
-
-```sh
-taraol experiment summary converge-vs-runaway --run <run_id>
-taraol experiment diff <run1> <run2>          # cost/latency/loops deltas between runs
-```
-
-```
-variant       cost$   tokens  agents   avg ms  loops  breakers  fails  health
-baseline     0.0116     4127       5    42460      0         0      0    91.5
-runaway      0.0266     9457       5   130972      1         1      0    58.8
-
-Highest Operational Health: baseline
-```
-
-That table is a real run: the runaway variant cost 2.3×, ran 3× longer, and the kit's watcher
-caught its loop **from telemetry** and tripped the breaker. `HealthScore` is pluggable
-(`100 − 10·loops − 5·breaker − 0.2·latency_s − 0.1·cost − 20·fails`) and "highest health" is a
-factual read, not a universal winner.
-
-The bundled dashboard on a live trip-planner run — the `shoestring` variant burns 3.5× the
-cost and 40s of latency looping on an impossible budget before the breaker cuts it:
-
-![AgentLab experiment-comparison dashboard in SigNoz — P95 latency, direct LLM cost, and output tokens split by experiment.variant](docs/agentlab-dashboard.png)
-
-## Self-defense toolkit
-
-```python
-from taraol.breaker import get_registry, edge_key
-from taraol.guardrail import INPUT, scan
-
-get_registry().allow(edge_key("writer", "critic"))   # per-edge circuit breaker
-scan(fetched_docs, INPUT)                            # jailbreak/injection patterns
-kit.mark_injection("jailbreak")                      # taint the span; spreads via baggage
-```
-
-The `[detection]` extra ships a **watcher** (reads SigNoz, flags runaway loops / budget
-breaches / injection blast-radius / unhealthy edges — signals carry the experiment variant) and
-a **controller** (SigNoz alert webhook → pause the agent or trip a breaker → trace-correlated
-audit). Analysis helpers: `find_cycles`, `find_directed_cycles`, `origin_of_bad_output`.
-
-## The demos (a ladder)
+## Examples — from a single process to a distributed mesh
 
 | demo | scale | shows |
 |---|---|---|
-| [`main.py`](main.py) | 1 agent, 1 process | quickstart + prompt A/B experiment |
-| [`main_2.py`](main_2.py) | 3 agents, 1 process | revision loop → breaker; guardrail catches injection |
-| [`demos/trip_planner/`](demos/trip_planner/) | 4 agents, 1 process | a real-life app on the decorator tier |
-| [`demos/research_mesh/`](demos/research_mesh/) | 5 services, containers | cross-process traces, Service Map, watcher detection, alert → controller enforcement |
+| [`demos/trip_planner/`](demos/trip_planner/) | 4 agents, 1 process | decorator-tier quickstart · prompt/budget experiment · revision loop → breaker · guardrail catches injection |
+| [`demos/research_mesh/`](demos/research_mesh/) | **5 services, containers** | cross-process traces · Service Map · watcher loop detection · alert → controller enforcement · Foundry deploy |
 
-The mesh is the distributed story: `docker compose -f demos/research_mesh/compose.yaml up -d
---build`, then `python -m research_mesh.experiment` fires converging-vs-runaway and the watcher
-catches the storm. Its SigNoz ships as a committed, reproducible **Foundry** deploy
-([`casting.yaml`](demos/research_mesh/signoz/casting.yaml) +
-[lock](demos/research_mesh/signoz/casting.yaml.lock)):
-`foundryctl cast -f demos/research_mesh/signoz/casting.yaml`.
+```bash
+# single-process demo — real Gemini, one command:
+uv run python demos/trip_planner/app.py
+
+# the distributed story:
+docker compose -f demos/research_mesh/compose.yaml up -d --build
+docker exec research-mesh-planner-1 python -m research_mesh.experiment
+```
+
+---
+
+## Why Taraol vs the alternatives
+
+| capability | Taraol | typical LLM-eval / framework tracers |
+|---|---|---|
+| OpenTelemetry-native (traceparent, gen_ai semconv) | ✅ | varies — often proprietary SaaS |
+| Works with any Python code, no framework ownership | ✅ | usually tied to one framework |
+| Distributed multi-service agent mesh | ✅ | mostly single-process |
+| Live Service Map | ✅ (SigNoz) | ❌ |
+| Operational experiments (cost/loops/breakers per variant) | ✅ AgentLab | ❌ — they compare answer quality |
+| Loop detection **from telemetry** | ✅ | ❌ |
+| Per-edge circuit breakers · injection taint · provenance | ✅ | ❌ |
+| Alert → automatic enforcement | ✅ | ❌ |
+| Reproducible backend deploy (Foundry) | ✅ | n/a |
+
+Evaluation tools answer *"which answer is better?"* Taraol answers *"which workflow is cheaper,
+more stable, and safer — and should I deploy it?"*
+
+---
+
+## Documentation
+
+- [AgentLab — operational experiments](docs/agentlab.md)
+- [Self-defending mesh — detection & enforcement](docs/self-defense.md)
+- [Architecture & instrumentation tiers](docs/architecture.md)
+- [Reproducible SigNoz with Foundry](docs/foundry.md)
 
 ## Configuration
 
-Zero-config defaults; override via `instrument(...)`, `Settings`, or env.
+Zero-config defaults; override via `instrument(...)`, `Settings`, or env. Key settings:
+`OAK_CAPTURE_CONTENT` (content capture, off), `OTEL_EXPORTER_OTLP_ENDPOINT`,
+`OAK_A2A_TIMEOUT_SEC` (hop timeout, 10s), `OAK_EXPERIMENT_ID/_VARIANT/_RUN_ID`.
 
-| Setting | Default | Env |
-|---|---|---|
-| `capture_content` | `False` | `OAK_CAPTURE_CONTENT` |
-| `attr_namespace` | `agentmesh` | `OAK_ATTR_NAMESPACE` |
-| endpoint | — | `OTEL_EXPORTER_OTLP_ENDPOINT` |
-| A2A hop timeout | `10s` | `OAK_A2A_TIMEOUT_SEC` |
-| experiment tags | off | `OAK_EXPERIMENT_ID / _VARIANT / _RUN_ID` |
-
-**Guarantees:** `ParentBased(ALWAYS_ON)` sampling; no content capture by default (variant knob
-values included); `gen_ai.*` keys are standard semconv, never namespaced; core install is
-web-dependency-free.
+**Guarantees:** `ParentBased(ALWAYS_ON)` sampling · no content capture by default · `gen_ai.*`
+keys are standard semconv, never namespaced · core install is web-dependency-free.
 
 Apache-2.0.

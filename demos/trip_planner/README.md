@@ -22,6 +22,6 @@ uv run python demos/trip_planner/app.py
 SIGNOZ_CLICKHOUSE_URL=http://localhost:8123 taraol experiment summary tokyo-trip
 ```
 
-The demo ladder: [`main.py`](../../main.py) (1 agent, prompt A/B) → this (4 agents, one
-process, self-defense) → [`research_mesh/`](../research_mesh/) (5 containers, cross-process
-traces, watcher + alert → controller enforcement).
+The demo ladder: **this** (4 agents, one process, decorator tier, self-defense) →
+[`research_mesh/`](../research_mesh/) (5 containers, cross-process traces, Service Map, watcher
+loop detection, alert → controller enforcement).
