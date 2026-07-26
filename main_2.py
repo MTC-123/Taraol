@@ -17,6 +17,7 @@ enforcement) live in demos/research_mesh/.
 .env: GEMINI_API_KEY, OTEL_EXPORTER_OTLP_ENDPOINT (e.g. http://localhost:4317)
 """
 
+import os
 import uuid
 
 from dotenv import load_dotenv
@@ -27,6 +28,8 @@ from taraol.breaker import BreakerConfig, EdgeBreakerRegistry, edge_key
 from taraol.guardrail import INPUT, scan
 
 load_dotenv()
+# Label this app in SigNoz's Environment filter (standard OTel resource attribute).
+os.environ.setdefault("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=quickstart")
 kit = instrument("pipeline", capture_content=True)  # OTLP endpoint from the environment
 
 MODEL = "gemini-2.5-flash"

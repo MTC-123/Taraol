@@ -17,6 +17,7 @@ Run:  uv run python demos/trip_planner/app.py
 .env: GEMINI_API_KEY, OTEL_EXPORTER_OTLP_ENDPOINT (e.g. http://localhost:4317)
 """
 
+import os
 import uuid
 
 from dotenv import load_dotenv
@@ -27,6 +28,8 @@ from taraol.breaker import BreakerConfig, EdgeBreakerRegistry, edge_key
 from taraol.guardrail import INPUT, scan
 
 load_dotenv()
+# Label this app in SigNoz's Environment filter (standard OTel resource attribute).
+os.environ.setdefault("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=trip-planner")
 kit = instrument("trip-planner", capture_content=True)  # OTLP endpoint from the environment
 
 MODEL = "gemini-2.5-flash"

@@ -8,12 +8,16 @@ variant proves a failure is recorded, not fatal.
 .env: GEMINI_API_KEY, OTEL_EXPORTER_OTLP_ENDPOINT (e.g. http://localhost:4317)
 """
 
+import os
+
 from dotenv import load_dotenv
 from google import genai
 
 from taraol import Experiment, agent, chat, instrument
 
 load_dotenv()
+# Label this app in SigNoz's Environment filter (standard OTel resource attribute).
+os.environ.setdefault("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=quickstart")
 instrument("assistant", capture_content=True)  # OTLP endpoint comes from the environment
 
 MODEL = "gemini-2.5-flash"
