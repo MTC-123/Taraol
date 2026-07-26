@@ -63,14 +63,17 @@ from taraol import instrument, agent, chat, tool
 
 instrument("assistant")
 
-@tool                                     # execute_tool span
+
+@tool  # execute_tool span
 def search(query): ...
 
-@chat("gemini-2.5-flash")                 # chat span (gen_ai semconv) + cost rollup
+
+@chat("gemini-2.5-flash")  # chat span (gen_ai semconv) + cost rollup
 def think(prompt):
     return client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
 
-@agent(name="assistant")                  # invoke_agent span around the step
+
+@agent(name="assistant")  # invoke_agent span around the step
 def answer(question):
     return think(search(question)).text
 ```
@@ -191,7 +194,7 @@ via OTel baggage:
 ```python
 verdict = scan(fetched_docs, INPUT)
 if verdict.flagged:
-    kit.mark_injection(verdict.category)   # spreads via baggage
+    kit.mark_injection(verdict.category)  # spreads via baggage
 ```
 
 The question changes from *"was this agent attacked?"* to *"which agents consumed poisoned
@@ -224,11 +227,13 @@ Observability tells you what happened. It doesn't tell you what to ship.
 ```python
 from taraol import Experiment
 
-(Experiment("docs-assistant", author="Fraol")
-    .compare("terse",   prompt="Explain OpenTelemetry in exactly one sentence.")
+(
+    Experiment("docs-assistant", author="Fraol")
+    .compare("terse", prompt="Explain OpenTelemetry in exactly one sentence.")
     .compare("verbose", prompt="Explain OpenTelemetry in three detailed paragraphs.")
-    .compare("broken")                    # a failing variant is recorded, not fatal
-    .run(answer))
+    .compare("broken")  # a failing variant is recorded, not fatal
+    .run(answer)
+)
 ```
 
 Every span emitted during a variant carries `experiment.id`, `experiment.variant`, and

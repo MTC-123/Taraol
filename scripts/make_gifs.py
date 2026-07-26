@@ -86,8 +86,7 @@ def new_frame(title: str, subtitle: str = "") -> tuple[Image.Image, ImageDraw.Im
     if subtitle:
         draw.text((40, 70), subtitle, font=font(16), fill=SLATE)
     # Watermark lives in the dead space under the caption so it never collides.
-    draw.text((WIDTH - 40, HEIGHT - 26), "Taraol", font=font(13, bold=True), fill=LINE,
-              anchor="ra")
+    draw.text((WIDTH - 40, HEIGHT - 26), "Taraol", font=font(13, bold=True), fill=LINE, anchor="ra")
     return image, draw
 
 
@@ -113,12 +112,18 @@ def node(
     )
     # Small nodes can't hold "researcher" inside the rim, so their labels sit underneath.
     anchor = (x, y + radius + 12) if label_below else (x, y)
-    draw.text(anchor, label, font=font(label_size, bold=True),
-              fill=LINE if dim else (color if label_below else INK), anchor="mm")
+    draw.text(
+        anchor,
+        label,
+        font=font(label_size, bold=True),
+        fill=LINE if dim else (color if label_below else INK),
+        anchor="mm",
+    )
 
 
-def _arrow_head(draw: ImageDraw.ImageDraw, tip: Point, angle: float, color: Color,
-                width: int) -> None:
+def _arrow_head(
+    draw: ImageDraw.ImageDraw, tip: Point, angle: float, color: Color, width: int
+) -> None:
     size = 4 + width * 2.6
     for offset in (2.5, -2.5):
         draw.line(
@@ -201,8 +206,12 @@ def back_edge(
         )
         for t in (i / 60 for i in range(61))
     ]
-    curve = [p for p in curve if hypot(p[0] - start[0], p[1] - start[1]) > pad
-             and hypot(p[0] - end[0], p[1] - end[1]) > pad]
+    curve = [
+        p
+        for p in curve
+        if hypot(p[0] - start[0], p[1] - start[1]) > pad
+        and hypot(p[0] - end[0], p[1] - end[1]) > pad
+    ]
     if len(curve) < 3:
         return
     progress = min(max(progress, 0.0), 1.0)
@@ -278,8 +287,12 @@ MESH: dict[str, Point] = {
     "critic": (720, 218),
     "router": (840, 400),
 }
-CHAIN = [("planner", "researcher"), ("researcher", "writer"), ("writer", "critic"),
-         ("critic", "router")]
+CHAIN = [
+    ("planner", "researcher"),
+    ("researcher", "writer"),
+    ("writer", "critic"),
+    ("critic", "router"),
+]
 # How far into the build-out each node stops being a placeholder.
 ARRIVES = {"planner": 0.0, "researcher": 0.5, "writer": 1.5, "critic": 2.5, "router": 3.5}
 
@@ -298,8 +311,14 @@ def mesh_topology() -> list[Image.Image]:
         loop_t = (index - per_edge * len(CHAIN) - hold) / loop_in
         for order, (src, dst) in enumerate(CHAIN):
             span = built - order
-            edge(draw, MESH[src], MESH[dst], color=ACCENT, progress=ease(min(max(span, 0.0), 1.0)),
-                 dot=span % 1.0 if 0 < span < 1 else None)
+            edge(
+                draw,
+                MESH[src],
+                MESH[dst],
+                color=ACCENT,
+                progress=ease(min(max(span, 0.0), 1.0)),
+                dot=span % 1.0 if 0 < span < 1 else None,
+            )
         if loop_t > 0:
             settled = loop_t >= 1
             pulse = 0.5 + 0.5 * sin(index / 2.2)
@@ -318,12 +337,17 @@ def mesh_topology() -> list[Image.Image]:
                 for name in ("writer", "critic"):
                     x, y = MESH[name]
                     glow = int(46 + 6 * pulse)
-                    draw.ellipse((x - glow, y - glow, x + glow, y + glow), outline=LOOPRED,
-                                 width=2)
+                    draw.ellipse((x - glow, y - glow, x + glow, y + glow), outline=LOOPRED, width=2)
         for name, position in MESH.items():
             looping = loop_t >= 1 and name in ("writer", "critic")
-            node(draw, position, name, color=LOOPRED if looping else ACCENT,
-                 fill=NODE_HOT if looping else NODE_FILL, dim=built < ARRIVES[name])
+            node(
+                draw,
+                position,
+                name,
+                color=LOOPRED if looping else ACCENT,
+                fill=NODE_HOT if looping else NODE_FILL,
+                dim=built < ARRIVES[name],
+            )
         if loop_t <= 0:
             caption(draw, "Each agent is its own OTel service; every hop carries traceparent.")
         else:
@@ -337,8 +361,13 @@ def mesh_topology() -> list[Image.Image]:
 # --------------------------------------------------------------------------------------
 
 TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736"
-SPAN_IDS = ["00f067aa0ba902b7", "b7ad6b7169203331", "3c2f1a94ee5d80c1", "9d8e7f60a1b2c3d4",
-            "5e4d3c2b1a098765"]
+SPAN_IDS = [
+    "00f067aa0ba902b7",
+    "b7ad6b7169203331",
+    "3c2f1a94ee5d80c1",
+    "9d8e7f60a1b2c3d4",
+    "5e4d3c2b1a098765",
+]
 PROCS = ["planner", "researcher", "writer", "critic", "router"]
 
 
@@ -366,10 +395,20 @@ def traceparent_hop() -> list[Image.Image]:
                 outline=ACCENT if reached else LINE,
                 width=3 if reached else 2,
             )
-            draw.text((x + box_w / 2, top + 34), name, font=font(17, bold=True),
-                      fill=INK if reached else LINE, anchor="mm")
-            draw.text((x + box_w / 2, top + 64), "own OTel service",
-                      font=font(12), fill=SLATE if reached else LINE, anchor="mm")
+            draw.text(
+                (x + box_w / 2, top + 34),
+                name,
+                font=font(17, bold=True),
+                fill=INK if reached else LINE,
+                anchor="mm",
+            )
+            draw.text(
+                (x + box_w / 2, top + 64),
+                "own OTel service",
+                font=font(12),
+                fill=SLATE if reached else LINE,
+                anchor="mm",
+            )
             centers.append((x + box_w / 2, top + 48))
 
         current = min(int(hop), 3)
@@ -380,19 +419,34 @@ def traceparent_hop() -> list[Image.Image]:
             travel = start_x + (end_x - start_x) * ease(fraction)
             draw.line(((start_x, top + 48), (end_x, top + 48)), fill=LINE, width=2)
             draw.ellipse((travel - 9, top + 39, travel + 9, top + 57), fill=ACCENT)
-            draw.text((travel, top - 20), "traceparent", font=font(13, bold=True), fill=ACCENTDK,
-                      anchor="mm")
+            draw.text(
+                (travel, top - 20),
+                "traceparent",
+                font=font(13, bold=True),
+                fill=ACCENTDK,
+                anchor="mm",
+            )
 
         header_span = SPAN_IDS[min(int(hop + 0.5), 4)]
         draw.rounded_rectangle((70, 336, WIDTH - 70, 420), radius=10, fill=PANEL, outline=LINE)
         draw.text((92, 352), "traceparent header on the wire", font=font(13), fill=SLATE)
         x = 92
-        for text, color in (("00-", SLATE), (TRACE_ID, LOOPRED), ("-", SLATE),
-                            (header_span, ACCENT), ("-01", SLATE)):
+        for text, color in (
+            ("00-", SLATE),
+            (TRACE_ID, LOOPRED),
+            ("-", SLATE),
+            (header_span, ACCENT),
+            ("-01", SLATE),
+        ):
             draw.text((x, 380), text, font=font(17, mono=True), fill=color)
             x += draw.textlength(text, font=font(17, mono=True))
-        draw.text((WIDTH - 92, 352), "trace id constant   \u00b7   span id changes each hop",
-                  font=font(13), fill=SLATE, anchor="ra")
+        draw.text(
+            (WIDTH - 92, 352),
+            "trace id constant   \u00b7   span id changes each hop",
+            font=font(13),
+            fill=SLATE,
+            anchor="ra",
+        )
         caption(
             draw,
             "ParentBased(ALWAYS_ON): a child never re-decides sampling, so the mesh "
@@ -449,13 +503,18 @@ def incident_beat() -> list[Image.Image]:
 
         rail_y = 132
         draw.line(((40, rail_y), (WIDTH - 40, rail_y)), fill=LINE, width=4)
-        draw.line(((40, rail_y), (40 + (WIDTH - 80) * ((index + 1) / total), rail_y)), fill=color,
-                  width=4)
+        draw.line(
+            ((40, rail_y), (40 + (WIDTH - 80) * ((index + 1) / total), rail_y)), fill=color, width=4
+        )
         for order in range(len(BEATS)):
             x = 40 + (WIDTH - 80) * (order / (len(BEATS) - 1))
             done = order <= beat
-            draw.ellipse((x - 7, rail_y - 7, x + 7, rail_y + 7), fill=color if done else PAPER,
-                         outline=color if done else LINE, width=3)
+            draw.ellipse(
+                (x - 7, rail_y - 7, x + 7, rail_y + 7),
+                fill=color if done else PAPER,
+                outline=color if done else LINE,
+                width=3,
+            )
         draw.text((40, rail_y + 14), window, font=font(14, bold=True), fill=color)
 
         # left panel: the mesh
@@ -465,10 +524,16 @@ def incident_beat() -> list[Image.Image]:
             edge(draw, MINI[src], MINI[dst], color=ACCENT, width=2, pad=27)
         if beat >= 1:
             cut = beat >= 2
-            back_edge(draw, MINI["critic"], MINI["writer"],
-                      color=LINE if cut else blend(AMBER, LOOPRED, 0.55 + 0.45 * sin(index / 2.0)),
-                      width=3, pad=28, bow=52,
-                      dot=None if cut else (index / 8.0) % 1.0)
+            back_edge(
+                draw,
+                MINI["critic"],
+                MINI["writer"],
+                color=LINE if cut else blend(AMBER, LOOPRED, 0.55 + 0.45 * sin(index / 2.0)),
+                width=3,
+                pad=28,
+                bow=52,
+                dot=None if cut else (index / 8.0) % 1.0,
+            )
         if beat >= 2:
             # The breaker cuts one edge, not the whole agent: mark the hop itself.
             wx, wy = MINI["writer"]
@@ -477,25 +542,38 @@ def incident_beat() -> list[Image.Image]:
             draw.line(((mx - 9, my - 9), (mx + 9, my + 9)), fill=AMBER, width=4)
             draw.line(((mx - 9, my + 9), (mx + 9, my - 9)), fill=AMBER, width=4)
             # Status chip in the panel's dead space; beside the X it collides with `critic`.
-            draw.text((60, 400), "writer → critic  ·  breaker OPEN", font=font(12, bold=True),
-                      fill=AMBER)
+            draw.text(
+                (60, 400), "writer → critic  ·  breaker OPEN", font=font(12, bold=True), fill=AMBER
+            )
         for name, position in MINI.items():
             hot = beat >= 1 and name in ("writer", "critic")
             stopped = beat >= 3 and name == "writer"
-            node(draw, position, name, radius=22, width=2, label_size=13, label_below=True,
-                 color=SLATE if stopped else (LOOPRED if hot else ACCENT),
-                 fill=NODE_OFF if stopped else (NODE_HOT if hot else NODE_FILL))
+            node(
+                draw,
+                position,
+                name,
+                radius=22,
+                width=2,
+                label_size=13,
+                label_below=True,
+                color=SLATE if stopped else (LOOPRED if hot else ACCENT),
+                fill=NODE_OFF if stopped else (NODE_HOT if hot else NODE_FILL),
+            )
         if beat >= 3:
             x, y = MINI["writer"]
             draw.text((x, y + 50), "PAUSED", font=font(11, bold=True), fill=SLATE, anchor="mm")
 
         # right panel: the conversation-budget chart
-        draw.rounded_rectangle((494, 176, WIDTH - 40, 424), radius=12, fill="#FFFFFF",
-                               outline=LINE)
+        draw.rounded_rectangle((494, 176, WIDTH - 40, 424), radius=12, fill="#FFFFFF", outline=LINE)
         draw.text((514, 190), "Conversation budget", font=font(14, bold=True), fill=SLATE)
         spend = _cost_curve(index / total) * FINAL_COST / 0.84
-        draw.text((WIDTH - 62, 188), f"${spend:.4f}", font=font(23, bold=True),
-                  fill=GOOD if beat >= 4 else ACCENTDK, anchor="ra")
+        draw.text(
+            (WIDTH - 62, 188),
+            f"${spend:.4f}",
+            font=font(23, bold=True),
+            fill=GOOD if beat >= 4 else ACCENTDK,
+            anchor="ra",
+        )
         plot = (526, 236, WIDTH - 62, 396)
         for step in range(1, 4):
             gy = plot[1] + (plot[3] - plot[1]) * step / 4
@@ -504,8 +582,13 @@ def incident_beat() -> list[Image.Image]:
         draw.line(((plot[0], plot[1]), (plot[0], plot[3])), fill=LINE, width=2)
         budget_y = plot[3] - (plot[3] - plot[1]) * 0.9
         draw.line(((plot[0], budget_y), (plot[2], budget_y)), fill=LOOPRED, width=2)
-        draw.text((plot[0] + 8, budget_y - 8), "budget", font=font(12, bold=True), fill=LOOPRED,
-                  anchor="lb")
+        draw.text(
+            (plot[0] + 8, budget_y - 8),
+            "budget",
+            font=font(12, bold=True),
+            fill=LOOPRED,
+            anchor="lb",
+        )
         points = [
             (
                 plot[0] + (plot[2] - plot[0]) * (step / total),
@@ -518,8 +601,13 @@ def incident_beat() -> list[Image.Image]:
             head = points[-1]
             draw.ellipse((head[0] - 5, head[1] - 5, head[0] + 5, head[1] + 5), fill=ACCENT)
         if beat >= 4:
-            draw.text((points[-1][0] - 4, points[-1][1] + 22), "flatlined", font=font(13,
-                      bold=True), fill=GOOD, anchor="ra")
+            draw.text(
+                (points[-1][0] - 4, points[-1][1] + 22),
+                "flatlined",
+                font=font(13, bold=True),
+                fill=GOOD,
+                anchor="ra",
+            )
 
         caption(draw, text, color=color)
         frames.append(image)
@@ -573,23 +661,40 @@ def agentlab_compare() -> list[Image.Image]:
                 colour = GOOD if arm_index == 0 else LOOPRED
                 width = bar_max * (value / peak) * reveal
                 bar_y = y + arm_index * 13
-                draw.rounded_rectangle((left, bar_y, left + max(width, 2), bar_y + 10), radius=3,
-                                       fill=colour)
+                draw.rounded_rectangle(
+                    (left, bar_y, left + max(width, 2), bar_y + 10), radius=3, fill=colour
+                )
                 if reveal > 0.97:
                     text = fmt.format(value)
-                    draw.text((left + bar_max + 14, bar_y + 5), text, font=font(13), fill=INK,
-                              anchor="lm")
+                    draw.text(
+                        (left + bar_max + 14, bar_y + 5), text, font=font(13), fill=INK, anchor="lm"
+                    )
 
         if index >= per_metric * len(METRICS):
             fade = ease((index - per_metric * len(METRICS)) / 8)
             box = (60, 452, WIDTH - 60, 500)
-            draw.rounded_rectangle(box, radius=10, fill=blend(PAPER, "#DCFCE7", fade),
-                                   outline=GOOD if fade > 0.6 else LINE, width=2)
+            draw.rounded_rectangle(
+                box,
+                radius=10,
+                fill=blend(PAPER, "#DCFCE7", fade),
+                outline=GOOD if fade > 0.6 else LINE,
+                width=2,
+            )
             if fade > 0.5:
-                draw.text((80, 476), "Operational Health   baseline 91.5   vs   runaway 58.8",
-                          font=font(17, bold=True), fill=INK, anchor="lm")
-                draw.text((WIDTH - 80, 476), "ship baseline", font=font(17, bold=True), fill=GOOD,
-                          anchor="rm")
+                draw.text(
+                    (80, 476),
+                    "Operational Health   baseline 91.5   vs   runaway 58.8",
+                    font=font(17, bold=True),
+                    fill=INK,
+                    anchor="lm",
+                )
+                draw.text(
+                    (WIDTH - 80, 476),
+                    "ship baseline",
+                    font=font(17, bold=True),
+                    fill=GOOD,
+                    anchor="rm",
+                )
         else:
             caption(draw, "2.3× the cost. 3× the latency. One loop, one breaker trip.")
         frames.append(image)
@@ -633,8 +738,9 @@ def terminal_replay(log: Path) -> list[Image.Image]:
         draw.rectangle((0, 0, WIDTH, 34), fill="#1B2530")
         for order, dot_color in enumerate(("#FF5F57", "#FEBC2E", "#28C840")):
             draw.ellipse((22 + order * 22, 12, 34 + order * 22, 24), fill=dot_color)
-        draw.text((WIDTH / 2, 17), "make demo", font=font(14, bold=True), fill="#8B98A5",
-                  anchor="mm")
+        draw.text(
+            (WIDTH / 2, 17), "make demo", font=font(14, bold=True), fill="#8B98A5", anchor="mm"
+        )
         for order, line in enumerate(visible):
             color = TERM_FG
             if line.startswith(">>>"):
