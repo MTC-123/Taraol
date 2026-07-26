@@ -51,6 +51,7 @@ class VariantMetrics:
             breaker_trips=self.breaker_trips,
             p95_latency_s=self.avg_latency_ms / 1000.0,
             cost_usd=self.cost_usd,
+            failures=self.failures,
         )
 
 

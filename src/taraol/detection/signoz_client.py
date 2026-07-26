@@ -427,6 +427,17 @@ class ClickHouseClient:
         window_sec = max(1, (time_range.end_ms - time_range.start_ms + 999) // 1000)
         return f"timestamp >= now64(9) - toIntervalSecond({window_sec}) AND timestamp <= now64(9)"
 
+    @staticmethod
+    def _seconds_ns(time_range: TimeRange) -> str:
+        # signoz_logs.distributed_logs_v2 stores `timestamp` as a raw UInt64 of nanoseconds,
+        # NOT a DateTime64 like the traces table. Comparing that column against now64(9)
+        # (a DateTime64) silently matches zero rows, so bound the log window in nanoseconds.
+        window_sec = max(1, (time_range.end_ms - time_range.start_ms + 999) // 1000)
+        return (
+            f"timestamp >= toUnixTimestamp64Nano(now64(9)) - {window_sec} * 1000000000 "
+            "AND timestamp <= toUnixTimestamp64Nano(now64(9))"
+        )
+
     def run_builder_query(
         self, query: Mapping[str, Any], time_range: TimeRange
     ) -> list[dict[str, Any]]:
@@ -459,7 +470,8 @@ class ClickHouseClient:
         return self.run_builder_query(audit_query(trace_id), time_range)
 
     def _sql(self, name: str, spec: Mapping[str, Any], time_range: TimeRange) -> str:
-        bounded = self._seconds(time_range)
+        bounded = self._seconds(time_range)  # traces table (DateTime64 timestamp)
+        bounded_ns = self._seconds_ns(time_range)  # logs table (UInt64 ns timestamp)
         attrs = "attributes_string"
         if name == "velocity":
             return f"""
@@ -577,7 +589,7 @@ class ClickHouseClient:
                 SELECT attributes_string['experiment_variant'] AS `experiment_variant`,
                        count() AS {alias}
                 FROM signoz_logs.distributed_logs_v2
-                WHERE {bounded} AND body = '{body}'
+                WHERE {bounded_ns} AND body = '{body}'
                   AND mapContains(attributes_string, 'experiment_variant'){extra}
                 GROUP BY `experiment_variant`
             """
@@ -591,7 +603,7 @@ class ClickHouseClient:
                        count() AS runs,
                        avg(attributes_number['experiment.duration_ms']) AS avg_duration_ms
                 FROM signoz_logs.distributed_logs_v2
-                WHERE {bounded} AND body = 'experiment_run'{extra}
+                WHERE {bounded_ns} AND body = 'experiment_run'{extra}
                 GROUP BY `experiment.variant`
             """
         if name == "experiment_failure_count":
@@ -603,7 +615,7 @@ class ClickHouseClient:
                 SELECT attributes_string['experiment.variant'] AS `experiment.variant`,
                        count() AS failures
                 FROM signoz_logs.distributed_logs_v2
-                WHERE {bounded} AND body = 'experiment_run'
+                WHERE {bounded_ns} AND body = 'experiment_run'
                   AND attributes_string['experiment.status'] = 'failed'{extra}
                 GROUP BY `experiment.variant`
             """

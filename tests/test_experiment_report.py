@@ -7,6 +7,7 @@ from taraol.detection.signoz_client import (
     ClickHouseClient,
     TimeRange,
     experiment_loop_count_query,
+    experiment_run_count_query,
     experiment_span_metrics_query,
 )
 from taraol.experiments import HealthScore
@@ -121,6 +122,23 @@ def test_summary_reports_highest_health_not_winner() -> None:
     assert "Highest Operational Health: baseline" in out
     assert "winner" not in out.lower()
     assert metrics["baseline"].health(scorer) > metrics["runaway"].health(scorer)
+
+
+def test_log_queries_use_nanosecond_time_bound() -> None:
+    # Regression: signoz_logs.distributed_logs_v2.timestamp is a raw UInt64 of nanoseconds,
+    # not a DateTime64 like the traces table. Comparing it to now64(9) matches zero rows, so
+    # the log-table experiment queries must bound the window in nanoseconds — otherwise the
+    # summary shows avg_latency/loops/breakers/failures all as 0.
+    ch = ClickHouseClient("http://clickhouse.invalid")
+    window = TimeRange(0, 1)
+    for name, query in (
+        ("experiment_loop_count", experiment_loop_count_query("e")),
+        ("experiment_run_count", experiment_run_count_query("e")),
+    ):
+        assert "toUnixTimestamp64Nano" in ch._sql(name, query, window)
+    # the traces table keeps the DateTime64 (now64) bound
+    span_sql = ch._sql("experiment_span_metrics", experiment_span_metrics_query("e"), window)
+    assert "toUnixTimestamp64Nano" not in span_sql and "now64(9)" in span_sql
 
 
 def test_diff_shows_run_level_deltas() -> None:

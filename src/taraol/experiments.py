@@ -125,6 +125,7 @@ class HealthScore:
     breaker_weight: float = 5.0
     latency_weight: float = 0.2  # per second of P95 latency
     cost_weight: float = 0.1  # per USD
+    failure_weight: float = 20.0  # a variant that errored is not a healthy one to run
 
     def score(
         self,
@@ -133,13 +134,15 @@ class HealthScore:
         breaker_trips: float = 0,
         p95_latency_s: float = 0.0,
         cost_usd: float = 0.0,
+        failures: float = 0,
     ) -> float:
         return round(
             self.base
             - self.loop_weight * loops
             - self.breaker_weight * breaker_trips
             - self.latency_weight * p95_latency_s
-            - self.cost_weight * cost_usd,
+            - self.cost_weight * cost_usd
+            - self.failure_weight * failures,
             1,
         )
 

@@ -8,6 +8,8 @@ toolkit (runaway-loop detection, injection blast-radius, per-edge breaker, bad-o
 > Built for the "Agents of SigNoz" hackathon. `examples/research_mesh/` is a full reference app
 > (5 agents, real web search, real LLM) built entirely on this library.
 
+![taraol Service Map in SigNoz — planner → researcher → writer → critic → router, reconstructed from cross-process traceparent](docs/service-map.png)
+
 ## Install
 
 ```sh
@@ -26,18 +28,32 @@ taraol signoz up      # local SigNoz (UI :8080, OTLP :4317); `signoz down` to wi
 
 ## Quickstart
 
-```python
-from taraol import instrument
+Drop three decorators on the functions you already have:
 
-kit = instrument("planner")                                     # OTel wired, zero config
-with kit.agent("planner", conversation_id) as _a, kit.chat("gemini-2.5-flash") as c:
-    c.record(input_tokens=n_in, output_tokens=n_out)            # gen_ai span + cost rollup
+```python
+from taraol import instrument, agent, chat, tool, record_chat
+
+instrument("planner")                         # OTel wired, zero config
+
+@tool                                         # execute_tool span
+def search(query): ...
+
+@chat("gemini-2.5-flash")                     # chat span + cost rollup
+def think(prompt):
+    reply = model.generate(prompt)            # your LLM SDK
+    record_chat(input_tokens=reply.usage.input, output_tokens=reply.usage.output)
+    return reply.text
+
+@agent(name="planner")                        # invoke_agent span around the step
+def plan(task):
+    return think(search(task))
 ```
 
 `instrument()` installs one `ParentBased(ALWAYS_ON)` provider, a batching OTLP exporter, W3C
 trace-context + baggage propagation, and the bundled price table. Agents that propagate
-`traceparent` render as a live **Service Map** — no custom UI. Prefer decorators? `@agent` /
-`@chat` / `@tool` wrap the same context managers.
+`traceparent` render as the live **Service Map** above — no custom UI. Need streaming / async /
+fine control? The context managers do the same:
+`with kit.agent("planner", conversation_id), kit.chat("gemini-2.5-flash") as c: c.record(...)`.
 
 ## Opt-in step inspection
 
@@ -82,11 +98,12 @@ taraol experiment diff <run1> <run2>             # cost/latency/loops deltas
 ```
 variant       cost$   tokens  loops  breakers  fails  health
 baseline      0.0120    1200      0         0      0    99.6
-runaway       0.0480    4800      6         2      1    29.0
+runaway       0.0480    4800      6         2      1     9.0
 Highest Operational Health: baseline
 ```
 
-`HealthScore` is pluggable and "highest health" is a factual read, not a universal winner. Runnable
+`HealthScore` is pluggable (`100 − 10·loops − 5·breaker − 0.2·latency_s − 0.1·cost − 20·fails`,
+weights overridable) and "highest health" is a factual read, not a universal winner. Runnable
 baseline-vs-runaway: [`examples/research_mesh/experiment.py`](examples/research_mesh/experiment.py).
 
 ## Analysis + enforcement toolkit

@@ -150,6 +150,13 @@ def test_health_score_default_and_custom_weights() -> None:
     assert HealthScore(loop_weight=1).score(loops=2) == 98.0
 
 
+def test_health_score_penalizes_failures() -> None:
+    hs = HealthScore()
+    assert hs.score(failures=1) == 80.0
+    # a variant that errored must not out-score a clean but slower/pricier one
+    assert hs.score(failures=1) < hs.score(p95_latency_s=5, cost_usd=0.05)
+
+
 def test_metadata_autofills_and_splits_span_vs_log() -> None:
     md = ExperimentMetadata.collect(description="A/B", author="me")
     assert md.python_version and md.kit_version
