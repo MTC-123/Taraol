@@ -46,7 +46,12 @@ def _attrs(span: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _value(span: Mapping[str, Any], name: str) -> Any:
-    return span.get(name, _attrs(span).get(name))
+    found = span.get(name, _attrs(span).get(name))
+    if found is not None:
+        return found
+    # ClickHouse trace rows split numeric attributes into their own map.
+    numbers = span.get("attributes_number")
+    return numbers.get(name) if isinstance(numbers, Mapping) else None
 
 
 def _service(span: Mapping[str, Any]) -> str:

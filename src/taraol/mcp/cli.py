@@ -16,6 +16,24 @@ def _as_text(value: object) -> str:
     return str(value)
 
 
+def _plain_messages(value: object, indent: str) -> str:
+    """Decode a gen_ai message list to readable text (the wire stays standard JSON)."""
+
+    if value is None:
+        return "(not captured)"
+    try:
+        messages = json.loads(value) if isinstance(value, str) else value
+        parts = [
+            str(m["content"]) for m in messages if isinstance(m, dict) and m.get("content")
+        ]
+        if not parts:
+            return _as_text(value)
+        text = "\n\n".join(parts)
+        return text.replace("\n", "\n" + indent)
+    except (ValueError, TypeError):
+        return _as_text(value)
+
+
 def format_replay(trace_id: str, steps: list[Step]) -> str:
     """Render the per-step chain: each agent's input, output, tools, tokens, cost."""
 
@@ -29,8 +47,8 @@ def format_replay(trace_id: str, steps: list[Step]) -> str:
         lines += [
             "",
             f"[{i}] {step.agent}   ({toks}, {cost})",
-            f"    input:  {_as_text(step.input_messages)}",
-            f"    output: {_as_text(step.output_messages)}",
+            f"    input:  {_plain_messages(step.input_messages, '            ')}",
+            f"    output: {_plain_messages(step.output_messages, '            ')}",
         ]
         for tool in step.tools:
             lines.append(
