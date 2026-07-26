@@ -159,6 +159,16 @@ def test_variant_config_reads_as_attributes() -> None:
         _ = v.style2
 
 
+def test_variant_knobs_as_keywords() -> None:
+    _install()
+    e = Experiment("e").variant("terse", style="terse", model="gemini-2.5-flash")
+    v = e._variants[0]
+    assert v.style == "terse" and v.model == "gemini-2.5-flash"
+    # config= still accepted; keywords win on collision
+    e.variant("mix", config={"style": "old", "top_p": 0.9}, style="new")
+    assert e._variants[1].style == "new" and e._variants[1].top_p == 0.9
+
+
 def test_health_score_penalizes_failures() -> None:
     hs = HealthScore()
     assert hs.score(failures=1) == 80.0

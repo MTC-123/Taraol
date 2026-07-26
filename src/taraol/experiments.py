@@ -14,13 +14,13 @@ Primary API is the fluent builder::
 
     from taraol import Experiment
 
-    (Experiment("battery-report", description="Gemini prompt A/B", author="Fraol")
-        .variant("baseline", config={"loop_mode": "off"})
-        .variant("runaway",  config={"loop_mode": "storm"})
+    (Experiment("market-report", description="Gemini prompt A/B", author="Fraol")
+        .variant("baseline", loop_mode="off")
+        .variant("runaway",  loop_mode="storm")
         .run(workload))            # workload(variant) is called once per variant
 
-``config`` is a bag of experiment knobs (model / loop_mode / temperature / prompt-id) the
-workload reads; it is metadata about the run, not a place for secrets or full prompt text.
+Variant knobs (model / loop_mode / temperature / prompt-id) are plain keywords, read back as
+``variant.loop_mode``; they are metadata about the run, not a place for secrets or prompt text.
 """
 
 import functools
@@ -175,6 +175,19 @@ class RunResult:
     def ok(self) -> bool:
         return all(r.status == "success" for r in self.results)
 
+    def summary(self, *, since_sec: int = 3600, scorer: "HealthScore | None" = None) -> str:
+        """This run's per-variant table from SigNoz (same output as the summary CLI).
+
+        Needs the ``[detection]`` extra and ``SIGNOZ_API_KEY`` or ``SIGNOZ_CLICKHOUSE_URL``
+        set. Telemetry is batched — give the collector a few seconds after ``.run()``.
+        """
+
+        from .experiment_report import summarize
+
+        return summarize(
+            self.experiment_id, run_id=self.run_id, since_sec=since_sec, scorer=scorer
+        )
+
 
 def _config_attributes(config: Mapping[str, Any]) -> dict[str, str]:
     out: dict[str, str] = {}
@@ -233,8 +246,13 @@ class Experiment:
             description=description, author=author
         )
 
-    def variant(self, name: str, config: Mapping[str, Any] | None = None) -> "Experiment":
-        self._variants.append(Variant(name, dict(config or {})))
+    def variant(
+        self, name: str, config: Mapping[str, Any] | None = None, **knobs: Any
+    ) -> "Experiment":
+        """Add one arm. Knobs read best as keywords: ``.variant("terse", style="terse")``
+        (``config=`` accepts a prebuilt mapping; keywords win on collision)."""
+
+        self._variants.append(Variant(name, {**dict(config or {}), **knobs}))
         return self
 
     def compare(self, *variants: "Variant | str") -> "Experiment":

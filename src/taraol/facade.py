@@ -111,6 +111,7 @@ class ChatSpan:
         self._output = 0
         self._finish = "unknown"
         self._recorded = False
+        self._content_recorded = False
 
     @property
     def span(self) -> object:
@@ -122,6 +123,12 @@ class ChatSpan:
 
         return self._recorded
 
+    @property
+    def content_recorded(self) -> bool:
+        """True once content capture was attempted (explicit call wins over auto-capture)."""
+
+        return self._content_recorded
+
     def record(self, *, input_tokens: int, output_tokens: int, finish_reason: str = "stop") -> None:
         self._input, self._output, self._finish = input_tokens, output_tokens, finish_reason
         self._recorded = True
@@ -132,6 +139,7 @@ class ChatSpan:
     def record_content(self, *, prompt: str, completion: str, system: str | None = None) -> None:
         """Capture prompt/completion as gen_ai messages — ONLY when capture_content is on."""
 
+        self._content_recorded = True
         if not self._settings.capture_content:
             return
         limit = self._settings.content_max_chars

@@ -54,6 +54,41 @@ def _extract_usage(result: Any) -> tuple[int, int] | None:
     return None
 
 
+def _extract_completion(result: Any) -> str | None:
+    """Duck-type the completion text out of a raw SDK response."""
+
+    try:
+        text = getattr(result, "text", None)  # google-genai
+        if isinstance(text, str) and text:
+            return text
+        choices = getattr(result, "choices", None)  # OpenAI-compatible
+        if choices:
+            content = getattr(getattr(choices[0], "message", None), "content", None)
+            if isinstance(content, str) and content:
+                return content
+        content = getattr(result, "content", None)  # Anthropic (list of blocks)
+        if isinstance(content, (list, tuple)) and content:
+            text = getattr(content[0], "text", None)
+            if isinstance(text, str) and text:
+                return text
+    except Exception:  # noqa: BLE001 — best-effort probe over foreign SDK objects
+        return None
+    return None
+
+
+def _guess_prompt(args: tuple, kwargs: dict) -> str | None:
+    """The wrapped function's prompt: a well-known kwarg, else the first str argument."""
+
+    for key in ("prompt", "message", "input", "contents", "text"):
+        value = kwargs.get(key)
+        if isinstance(value, str) and value:
+            return value
+    for value in args:
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
 def agent(
     func: Callable | None = None,
     *,
@@ -96,15 +131,15 @@ def chat(model: str, *, provider: str | None = None) -> Callable:
     """Wrap a function as a ``chat`` span for ``model``.
 
     Return the raw SDK response and token usage is extracted automatically (google-genai,
-    OpenAI-compatible, and Anthropic response shapes) — no extra call needed::
+    OpenAI-compatible, and Anthropic response shapes) — and, when ``capture_content`` is
+    opted in, the prompt (the function's str argument) and completion are captured too::
 
         @chat("gemini-2.5-flash")
         def think(prompt):
             return client.models.generate_content(model=MODEL, contents=prompt)
 
-    :func:`record_chat` still works from inside for explicit/streaming cases (and always
-    wins over auto-extraction); :func:`record_chat_content` stays the explicit, opt-in way
-    to capture prompt/completion text.
+    :func:`record_chat` / :func:`record_chat_content` still work from inside for
+    explicit/streaming cases and always win over auto-extraction.
     """
 
     def deco(f: Callable) -> Callable:
@@ -120,6 +155,13 @@ def chat(model: str, *, provider: str | None = None) -> Callable:
                     usage = _extract_usage(result)
                     if usage is not None:
                         chat_span.record(input_tokens=usage[0], output_tokens=usage[1])
+                if not chat_span.content_recorded:
+                    # Auto content capture — record_content itself is a no-op unless the
+                    # user opted in via capture_content, so privacy stays default-off.
+                    completion = _extract_completion(result)
+                    prompt = _guess_prompt(args, kwargs)
+                    if completion and prompt:
+                        chat_span.record_content(prompt=prompt, completion=completion)
                 return result
 
         return wrapper

@@ -108,6 +108,46 @@ def test_chat_auto_extracts_usage_from_returned_response() -> None:
     assert spans[1].attributes[semconv.GEN_AI_USAGE_INPUT_TOKENS] == 30
 
 
+def test_chat_auto_captures_content_when_opted_in() -> None:
+    exporter = _install(capture=True)
+
+    @chat("gpt-4.1-mini")
+    def think(prompt):
+        return _GenAIResponse()  # .text == "hi"
+
+    think("what is otel?")
+    span = exporter.get_finished_spans()[0]
+    assert "what is otel?" in span.attributes[semconv.GEN_AI_INPUT_MESSAGES]
+    assert "hi" in span.attributes[semconv.GEN_AI_OUTPUT_MESSAGES]
+
+
+def test_chat_auto_content_stays_off_by_default() -> None:
+    exporter = _install()  # capture_content off
+
+    @chat("gpt-4.1-mini")
+    def think(prompt):
+        return _GenAIResponse()
+
+    think("secret prompt")
+    span = exporter.get_finished_spans()[0]
+    assert semconv.GEN_AI_INPUT_MESSAGES not in span.attributes
+    assert semconv.GEN_AI_OUTPUT_MESSAGES not in span.attributes
+
+
+def test_explicit_record_chat_content_wins_over_auto_capture() -> None:
+    exporter = _install(capture=True)
+
+    @chat("gpt-4.1-mini")
+    def think(prompt):
+        record_chat_content(prompt="explicit-p", completion="explicit-c")
+        return _GenAIResponse()  # auto would capture prompt/"hi"
+
+    think("auto-prompt")
+    span = exporter.get_finished_spans()[0]
+    assert "explicit-p" in span.attributes[semconv.GEN_AI_INPUT_MESSAGES]
+    assert "auto-prompt" not in span.attributes[semconv.GEN_AI_INPUT_MESSAGES]
+
+
 def test_explicit_record_chat_wins_over_auto_extraction() -> None:
     exporter = _install()
 
