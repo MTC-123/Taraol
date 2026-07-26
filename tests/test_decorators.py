@@ -108,6 +108,27 @@ def test_chat_auto_extracts_usage_from_returned_response() -> None:
     assert spans[1].attributes[semconv.GEN_AI_USAGE_INPUT_TOKENS] == 30
 
 
+def test_chat_auto_extracts_flat_result_objects() -> None:
+    """taraol.llm.LLMResult-style results: counts + finish_reason flat on the object."""
+    exporter = _install()
+
+    class _Flat:
+        text = "flat hi"
+        input_tokens = 11
+        output_tokens = 3
+        finish_reason = "length"
+
+    @chat("gpt-4.1-mini")
+    def call():
+        return _Flat()
+
+    call()
+    span = exporter.get_finished_spans()[0]
+    assert span.attributes[semconv.GEN_AI_USAGE_INPUT_TOKENS] == 11
+    assert span.attributes[semconv.GEN_AI_USAGE_OUTPUT_TOKENS] == 3
+    assert span.attributes[semconv.GEN_AI_RESPONSE_FINISH_REASONS] == ("length",)
+
+
 def test_chat_auto_captures_content_when_opted_in() -> None:
     exporter = _install(capture=True)
 

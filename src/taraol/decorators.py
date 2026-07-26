@@ -33,18 +33,21 @@ from .facade import ChatSpan, get_default_instrument
 _current_chat: ContextVar[ChatSpan | None] = ContextVar("oak_current_chat", default=None)
 
 # (usage attr on the response, prompt-tokens attr, completion-tokens attr) per SDK shape.
+# A None usage attr means the counts sit flat on the result itself (taraol.llm.LLMResult
+# and similar custom result objects).
 _USAGE_SHAPES = (
     ("usage_metadata", "prompt_token_count", "candidates_token_count"),  # google-genai
     ("usage", "prompt_tokens", "completion_tokens"),  # OpenAI-compatible
     ("usage", "input_tokens", "output_tokens"),  # Anthropic
+    (None, "input_tokens", "output_tokens"),  # flat result objects
 )
 
 
 def _extract_usage(result: Any) -> tuple[int, int] | None:
-    """Duck-type token usage out of a raw SDK response (genai/OpenAI/Anthropic shapes)."""
+    """Duck-type token usage out of a raw SDK response (genai/OpenAI/Anthropic/flat shapes)."""
 
     for usage_attr, in_attr, out_attr in _USAGE_SHAPES:
-        usage = getattr(result, usage_attr, None)
+        usage = result if usage_attr is None else getattr(result, usage_attr, None)
         if usage is None:
             continue
         input_tokens = getattr(usage, in_attr, None)
@@ -154,7 +157,12 @@ def chat(model: str, *, provider: str | None = None) -> Callable:
                 if not chat_span.recorded:
                     usage = _extract_usage(result)
                     if usage is not None:
-                        chat_span.record(input_tokens=usage[0], output_tokens=usage[1])
+                        finish = getattr(result, "finish_reason", None)
+                        chat_span.record(
+                            input_tokens=usage[0],
+                            output_tokens=usage[1],
+                            finish_reason=finish if isinstance(finish, str) and finish else "stop",
+                        )
                 if not chat_span.content_recorded:
                     # Auto content capture — record_content itself is a no-op unless the
                     # user opted in via capture_content, so privacy stays default-off.
