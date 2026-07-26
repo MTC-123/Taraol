@@ -169,6 +169,32 @@ def test_variant_knobs_as_keywords() -> None:
     assert e._variants[1].style == "new" and e._variants[1].top_p == 0.9
 
 
+def test_experiment_run_log_gates_knob_values_on_capture(monkeypatch: pytest.MonkeyPatch) -> None:
+    from taraol import experiments as ex
+
+    records: list = []
+
+    class _Logger:
+        def emit(self, record) -> None:
+            records.append(record)
+
+    monkeypatch.setattr(ex._logs, "get_logger", lambda name: _Logger())
+
+    def run_once() -> dict:
+        records.clear()
+        Experiment("e").variant("terse", prompt="secret prompt text").run(lambda v: None)
+        return dict(records[0].attributes)
+
+    _install()  # capture_content off (the default)
+    off = run_once()
+    assert off["experiment.config_keys"] == "prompt"  # names are safe, always there
+    assert "experiment.config.prompt" not in off  # values are content -> withheld
+
+    _install(capture_content=True)
+    on = run_once()
+    assert on["experiment.config.prompt"] == "secret prompt text"
+
+
 def test_health_score_penalizes_failures() -> None:
     hs = HealthScore()
     assert hs.score(failures=1) == 80.0

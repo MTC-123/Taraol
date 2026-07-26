@@ -19,8 +19,10 @@ Primary API is the fluent builder::
         .variant("runaway",  loop_mode="storm")
         .run(workload))            # workload(variant) is called once per variant
 
-Variant knobs (model / loop_mode / temperature / prompt-id) are plain keywords, read back as
-``variant.loop_mode``; they are metadata about the run, not a place for secrets or prompt text.
+Variant knobs (model / loop_mode / temperature / prompt) are plain keywords, read back as
+``variant.loop_mode``. Knob *values* are treated as content: the ``experiment_run`` log carries
+them only when the process opted into content capture (knob names are always logged). Never
+put secrets in knobs.
 """
 
 import functools
@@ -197,6 +199,17 @@ def _config_attributes(config: Mapping[str, Any]) -> dict[str, str]:
     return out
 
 
+def _capture_enabled() -> bool:
+    """Whether the process opted into content capture (variant knobs may hold prompt text)."""
+
+    try:
+        from .facade import get_default_instrument
+
+        return bool(get_default_instrument().settings.capture_content)
+    except Exception:  # noqa: BLE001 — no instrument yet counts as opted out
+        return False
+
+
 def _emit_experiment_run(
     experiment_id: str,
     variant: Variant,
@@ -217,7 +230,12 @@ def _emit_experiment_run(
         semconv.EXPERIMENT_DURATION_MS: duration_ms,
     }
     attributes.update(metadata.log_attributes())
-    attributes.update(_config_attributes(variant.config))
+    # Knob VALUES may hold prompt text (e.g. .variant("terse", prompt=...)), so they are
+    # content: only logged when the process opted into capture. Names are always safe.
+    if variant.config:
+        attributes["experiment.config_keys"] = ",".join(sorted(variant.config))
+    if _capture_enabled():
+        attributes.update(_config_attributes(variant.config))
     if error:
         attributes["experiment.error"] = error[:_CONFIG_VALUE_MAX]
     _logs.get_logger(_EXPERIMENT_LOGGER).emit(
