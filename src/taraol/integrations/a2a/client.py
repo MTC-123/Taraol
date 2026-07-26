@@ -1,5 +1,6 @@
 """JSON-RPC 2.0 A2A client with explicit trace-context propagation."""
 
+import os
 from collections.abc import Mapping
 from typing import Any, Protocol
 from urllib.parse import urlparse
@@ -18,6 +19,13 @@ from taraol.propagation import inject_into
 from taraol.taint import mark_taint, taint_from_baggage
 
 _NAMES = attrs("agentmesh")
+
+
+def _default_timeout() -> float:
+    try:
+        return float(os.environ.get("OAK_A2A_TIMEOUT_SEC", "10"))
+    except ValueError:
+        return 10.0
 
 
 class _HttpClient(Protocol):
@@ -40,11 +48,16 @@ class A2AClient:
         *,
         tracer: trace.Tracer | None = None,
         http_client: _HttpClient | None = None,
+        timeout: float | None = None,
     ) -> None:
         self.local_service_name = local_service_name
         self.target_service_name = target_service_name
         self.tracer = tracer or trace.get_tracer(local_service_name)
         self.http_client = http_client or httpx
+        # A synchronous hop waits for the callee's whole downstream subtree, so the
+        # timeout must cover the chain, not one call. Too short and every deep hop is
+        # recorded as a failure — which (correctly, by its rules) trips the breaker.
+        self.timeout = timeout if timeout is not None else _default_timeout()
 
     def call(self, method: str, params: Mapping[str, Any], target_url: str) -> dict[str, Any]:
         """Call one JSON-RPC method and return its object result."""
@@ -98,7 +111,7 @@ class A2AClient:
                         "method": method,
                         "params": dict(params),
                     },
-                    timeout=10.0,
+                    timeout=self.timeout,
                 )
                 response.raise_for_status()
             except httpx.HTTPError as exc:
