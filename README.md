@@ -67,6 +67,11 @@ taraol explain <trace-id> --replay
     tool search_sources: -> [3 results]
 ```
 
+The same chain in SigNoz — the full planner → researcher → writer → critic hop tree, with the
+captured prompt on the selected chat span:
+
+![A research-mesh trace in SigNoz: flame graph + waterfall across five services, gen_ai.input/output.messages visible on the selected chat span](docs/mesh-trace.png)
+
 ## AgentLab — compare AI agent variants with one function call
 
 Which prompt, model, or workflow is cheaper, faster, and *safer to run*? AgentLab tags every
@@ -111,7 +116,10 @@ caught its loop **from telemetry** and tripped the breaker. `HealthScore` is plu
 (`100 − 10·loops − 5·breaker − 0.2·latency_s − 0.1·cost − 20·fails`) and "highest health" is a
 factual read, not a universal winner.
 
-![AgentLab experiment-comparison dashboard in SigNoz — cost, tokens, latency, loops, breaker trips, and failures split by experiment.variant](docs/agentlab-dashboard.png)
+The bundled dashboard on a live trip-planner run — the `shoestring` variant burns 3.5× the
+cost and 40s of latency looping on an impossible budget before the breaker cuts it:
+
+![AgentLab experiment-comparison dashboard in SigNoz — P95 latency, direct LLM cost, and output tokens split by experiment.variant](docs/agentlab-dashboard.png)
 
 ## Self-defense toolkit
 
