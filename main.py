@@ -1,20 +1,13 @@
-"""Real integration test: taraol against live Gemini + a running SigNoz.
+"""taraol quickstart — a real AgentLab experiment against live Gemini + SigNoz.
 
-The 2-decorator DX, end to end. ``@chat`` extracts tokens + cost from the returned SDK
-response automatically (google-genai / OpenAI / Anthropic shapes) — the only explicit
-telemetry call left is ``record_chat_content``, because content capture is opt-in by design.
+Two decorators instrument everything: @agent opens the step span, @chat auto-extracts
+tokens + cost from the returned SDK response. The A/B: does a terse prompt beat a verbose
+one on cost and latency? A third, intentionally broken variant proves a failure is
+recorded — not fatal.
 
-The AgentLab experiment: a terse-vs-verbose prompt A/B, plus one intentionally broken
-variant (unknown prompt style -> KeyError) to prove failure-capture. Every span carries
-experiment.id / variant / run_id; each variant also emits one experiment_run log.
-
-Read it back (the run_id is printed below):
-
-    SIGNOZ_CLICKHOUSE_URL=http://localhost:8123 taraol experiment summary prompt-style-ab --run <run_id>
-
-Needs a running SigNoz, GEMINI_API_KEY (or GOOGLE_API_KEY), and
-OTEL_EXPORTER_OTLP_ENDPOINT in .env — no endpoint is hardcoded here, so the same file
-runs against local SigNoz, a team server, or SigNoz Cloud unchanged.
+Setup (.env): GEMINI_API_KEY, OTEL_EXPORTER_OTLP_ENDPOINT (e.g. http://localhost:4317).
+Read back:    SIGNOZ_CLICKHOUSE_URL=http://localhost:8123 \
+                  taraol experiment summary prompt-style-ab --run <run_id>
 """
 
 import os
@@ -24,16 +17,15 @@ from google import genai
 
 from taraol import Experiment, Variant, agent, chat, instrument, record_chat_content
 
+# --- setup ---------------------------------------------------------------------------
+
 load_dotenv()
 
-# .env here holds GEMINI_API_KEY; the google-genai SDK reads GOOGLE_API_KEY.
-API_KEY = os.environ.get("GOOGLE_API_KEY") or os.environ["GEMINI_API_KEY"]
 MODEL = "gemini-2.5-flash"
 EXPERIMENT_ID = "prompt-style-ab"
 
-client = genai.Client(api_key=API_KEY)
-
-instrument("assistant", capture_content=True)  # endpoint comes from the environment
+client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY") or os.environ["GEMINI_API_KEY"])
+instrument("assistant", capture_content=True)  # OTLP endpoint comes from the environment
 
 QUESTION = "Explain what OpenTelemetry is."
 PROMPTS = {
@@ -41,33 +33,49 @@ PROMPTS = {
     "verbose": f"{QUESTION} Answer in three detailed paragraphs.",
 }
 
+# --- the agent (all telemetry = these two decorators) --------------------------------
 
-@chat(MODEL)  # tokens + cost auto-extracted from the returned response
+
+@chat(MODEL)
 def think(prompt: str):
+    """Chat span. Tokens + cost are read off the returned response automatically."""
     response = client.models.generate_content(model=MODEL, contents=prompt)
-    record_chat_content(prompt=prompt, completion=response.text)  # content is opt-in
+    record_chat_content(prompt=prompt, completion=response.text)  # content capture is opt-in
     return response
 
 
-@agent(name="assistant")  # invoke_agent span around the step; experiment tags ride along
+@agent(name="assistant")
 def ask(variant: Variant) -> None:
+    """Agent span; experiment.id / variant / run_id tags ride along on every span."""
     text = think(PROMPTS[variant.style]).text  # "broken" has no such style -> KeyError
-    print(f"[{variant.name:7}] {text[:70].strip()}...")
+    print(f"  [{variant.name}] {text[:64].strip()}...")
 
+
+# --- run the experiment ----------------------------------------------------------------
 
 result = (
     Experiment(EXPERIMENT_ID, description="terse vs verbose prompt", author="Fraol")
     .variant("terse", config={"style": "terse"})
     .variant("verbose", config={"style": "verbose"})
-    .variant("broken", config={"style": "does-not-exist"})
+    .variant("broken", config={"style": "does-not-exist"})  # proves failure-capture
     .run(ask)
 )
 
-print(f"\nrun_id: {result.run_id}")
+# --- report ----------------------------------------------------------------------------
+
+WIDTH = 58
+print(f"\nExperiment  {result.experiment_id}")
+print(f"Run         {result.run_id}")
+print("-" * WIDTH)
+print(f"{'variant':<12}{'status':<12}{'duration':>12}")
 for r in result.results:
-    tail = "" if r.status == "success" else f"  ({r.error})"
-    print(f"  {r.variant:8} {r.status:8} {r.duration_ms:8.0f} ms{tail}")
+    print(f"{r.variant:<12}{r.status:<12}{r.duration_ms:>9.0f} ms")
+    if r.error:
+        print(f"{'':<12}{r.error[:WIDTH - 12]}")
+print("-" * WIDTH)
+ok = sum(r.status == "success" for r in result.results)
+print(f"{ok} succeeded, {len(result.results) - ok} failed")
 print(
-    "\nRead it:  SIGNOZ_CLICKHOUSE_URL=http://localhost:8123 "
+    "\nCompare:  SIGNOZ_CLICKHOUSE_URL=http://localhost:8123 "
     f"taraol experiment summary {EXPERIMENT_ID} --run {result.run_id}"
 )
