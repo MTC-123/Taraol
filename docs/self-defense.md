@@ -49,9 +49,10 @@ radius.
 
 ```python
 from taraol.breaker import get_registry, edge_key
+
 reg = get_registry()
 if reg.allow(edge_key("writer", "critic")):
-    ...        # make the call
+    ...  # make the call
     reg.record_success(edge_key("writer", "critic"))
 ```
 
@@ -63,7 +64,8 @@ attack.
 
 ```python
 from taraol.guardrail import INPUT, scan
-verdict = scan(fetched_docs, INPUT)     # jailbreak / injection patterns
+
+verdict = scan(fetched_docs, INPUT)  # jailbreak / injection patterns
 if verdict.flagged:
     kit.mark_injection(verdict.category)  # taint the span; spreads via OTel baggage
 ```
@@ -80,7 +82,8 @@ planners, retrievers, writers, and reviewers, finding the source by hand is hard
 
 ```python
 from taraol import origin_of_bad_output
-origin_of_bad_output(trace_spans, kit.names)   # who produced bad output, who consumed it
+
+origin_of_bad_output(trace_spans, kit.names)  # who produced bad output, who consumed it
 ```
 
 Provenance is reconstructed from telemetry, so the origin is found from traces rather than

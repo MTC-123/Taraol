@@ -73,11 +73,13 @@ from taraol import instrument, agent, chat
 
 instrument("assistant")
 
-@chat("gemini-2.5-flash")                     # tokens + cost read off the returned response
+
+@chat("gemini-2.5-flash")  # tokens + cost read off the returned response
 def think(prompt):
     return client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
 
-@agent(name="assistant")                      # invoke_agent span around the step
+
+@agent(name="assistant")  # invoke_agent span around the step
 def answer(question):
     return think(question).text
 ```
@@ -97,11 +99,13 @@ Compare variants of the same workload on **operational** telemetry, not answer q
 ```python
 from taraol import Experiment
 
-(Experiment("docs-assistant", author="Fraol")
-    .compare("terse",   prompt="Explain OpenTelemetry in exactly one sentence.")
+(
+    Experiment("docs-assistant", author="Fraol")
+    .compare("terse", prompt="Explain OpenTelemetry in exactly one sentence.")
     .compare("verbose", prompt="Explain OpenTelemetry in three detailed paragraphs.")
-    .compare("broken")                    # a failing variant is recorded, not fatal
-    .run(answer))                         # runs once per variant, one shared run_id
+    .compare("broken")  # a failing variant is recorded, not fatal
+    .run(answer)
+)  # runs once per variant, one shared run_id
 ```
 
 Every span is tagged with the experiment + variant, so **SigNoz becomes the experiment

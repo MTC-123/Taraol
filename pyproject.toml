@@ -59,3 +59,9 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+# Pin the lint rule set (Ruff's classic default: pyflakes + import/statement/syntax errors).
+# Keeps CI deterministic across Ruff releases, whose default select has widened to include
+# style opinions the project hasn't adopted.
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

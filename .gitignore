@@ -14,7 +14,8 @@ build/
 *.egg-info/
 # local dump target for `taraol dump-dashboards` (bundled copies live in src/taraol/data/)
 dashboards/
-# personal presentation script (not part of the repo)
+# personal presentation script + blog draft (not part of the repo)
 DEMO_SCRIPT.md
+BLOG_POST.md
 
 .claude/

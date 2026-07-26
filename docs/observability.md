@@ -28,14 +28,17 @@ from taraol import instrument, agent, chat, tool
 
 instrument("assistant")
 
-@tool                                     # execute_tool span; a str return is captured
+
+@tool  # execute_tool span; a str return is captured
 def search(query): ...
 
-@chat("gemini-2.5-flash")                 # chat span (gen_ai semconv) + cost rollup
+
+@chat("gemini-2.5-flash")  # chat span (gen_ai semconv) + cost rollup
 def think(prompt):
     return client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
 
-@agent(name="assistant")                  # invoke_agent span around the whole step
+
+@agent(name="assistant")  # invoke_agent span around the whole step
 def answer(question):
     return think(search(question)).text
 ```
@@ -66,6 +69,7 @@ record explicitly from inside the function — an explicit call always wins over
 
 ```python
 from taraol import record_chat
+
 record_chat(input_tokens=n_in, output_tokens=n_out, finish_reason="stop")
 ```
 
@@ -93,7 +97,8 @@ receive, the server extracts them and continues the same trace:
 
 ```python
 from taraol import inject_into, extract_from
-inject_into(headers)         # on send
+
+inject_into(headers)  # on send
 ctx = extract_from(headers)  # on receive
 ```
 
@@ -117,7 +122,7 @@ Environment filter.
 **No prompt, completion, or tool text is captured by default.** Turn it on explicitly:
 
 ```python
-instrument("assistant", capture_content=True)   # or OAK_CAPTURE_CONTENT=on
+instrument("assistant", capture_content=True)  # or OAK_CAPTURE_CONTENT=on
 ```
 
 Then chat spans record `gen_ai.input.messages` / `gen_ai.output.messages` (and
@@ -140,7 +145,8 @@ taraol explain <trace-id> --replay
 ```
 ```python
 from taraol import replay
-steps = replay.build_steps(spans)     # framework-neutral, from trace rows
+
+steps = replay.build_steps(spans)  # framework-neutral, from trace rows
 ```
 
 The wire format stays standard JSON message lists (role + content), so any OTel-aware tool
@@ -165,7 +171,7 @@ kit = instrument("planner")
 with kit.agent("planner", conversation_id) as span, kit.chat("gemini-2.5-flash") as c:
     result = my_streaming_call(prompt)
     c.record(input_tokens=result.n_in, output_tokens=result.n_out)
-    c.record_content(prompt=prompt, completion=result.text)   # opt-in
+    c.record_content(prompt=prompt, completion=result.text)  # opt-in
 ```
 
 Same spans, same telemetry — pick the tier that fits. The single-process demo

@@ -26,10 +26,10 @@ from taraol import Experiment
 
 result = (
     Experiment("docs-assistant", description="prompt comparison", author="Fraol")
-    .compare("terse",   prompt="Explain OpenTelemetry in exactly one sentence.")
+    .compare("terse", prompt="Explain OpenTelemetry in exactly one sentence.")
     .compare("verbose", prompt="Explain OpenTelemetry in three detailed paragraphs.")
-    .compare("broken")                    # a failing variant is recorded, not fatal
-    .run(answer)                          # answer(ctx) is called once per variant
+    .compare("broken")  # a failing variant is recorded, not fatal
+    .run(answer)  # answer(ctx) is called once per variant
 )
 ```
 

@@ -186,9 +186,7 @@ class RunResult:
 
         from .experiment_report import summarize
 
-        return summarize(
-            self.experiment_id, run_id=self.run_id, since_sec=since_sec, scorer=scorer
-        )
+        return summarize(self.experiment_id, run_id=self.run_id, since_sec=since_sec, scorer=scorer)
 
 
 def _config_attributes(config: Mapping[str, Any]) -> dict[str, str]:

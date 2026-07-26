@@ -23,9 +23,7 @@ def _plain_messages(value: object, indent: str) -> str:
         return "(not captured)"
     try:
         messages = json.loads(value) if isinstance(value, str) else value
-        parts = [
-            str(m["content"]) for m in messages if isinstance(m, dict) and m.get("content")
-        ]
+        parts = [str(m["content"]) for m in messages if isinstance(m, dict) and m.get("content")]
         if not parts:
             return _as_text(value)
         text = "\n\n".join(parts)
