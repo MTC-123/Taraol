@@ -1,6 +1,6 @@
 # research-mesh example: SigNoz (Foundry-rendered) + five agents + the kit's detection
 # watcher and controller, all built on taraol. Run from repo root:
-#   docker compose -f examples/research_mesh/compose.yaml up -d --build
+#   docker compose -f demos/research_mesh/compose.yaml up -d --build
 name: research-mesh
 
 include:
@@ -10,7 +10,7 @@ include:
 x-agent: &agent
   build:
     context: ../..
-    dockerfile: examples/research_mesh/Dockerfile
+    dockerfile: demos/research_mesh/Dockerfile
   environment: &agent-env
     OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
     OTEL_TRACES_SAMPLER: parentbased_always_on
@@ -79,7 +79,7 @@ services:
   watcher:
     build:
       context: ../..
-      dockerfile: examples/research_mesh/Dockerfile
+      dockerfile: demos/research_mesh/Dockerfile
     command: ["python", "-m", "taraol.detection.loop_watcher"]
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317
@@ -94,7 +94,7 @@ services:
   controller:
     build:
       context: ../..
-      dockerfile: examples/research_mesh/Dockerfile
+      dockerfile: demos/research_mesh/Dockerfile
     command: ["python", "-m", "taraol.detection.controller"]
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://ingester:4317

@@ -5,7 +5,7 @@ off); `runaway` storms the writer<->critic loop (loop_mode storm) so the kit's w
 fires loop_detected + trips the per-edge breaker. No redeploy, no env flip — the loop mode
 rides the payload per conversation.
 
-    python -m research_mesh.experiment          # from examples/, with the stack up
+    python -m research_mesh.experiment          # from demos/, with the stack up
 
 Then compare — SigNoz is the dashboard (import the experiment-comparison dashboard), or
 from the terminal::

@@ -7,6 +7,6 @@ ENV UV_CONCURRENT_DOWNLOADS=1
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN uv pip install --system ".[a2a,detection,mcp,search,llm]"
-COPY examples ./examples
-ENV PYTHONPATH=/app/examples
+COPY demos ./demos
+ENV PYTHONPATH=/app/demos
 CMD ["python", "-m", "research_mesh.agent"]

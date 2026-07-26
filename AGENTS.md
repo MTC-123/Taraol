@@ -3,7 +3,7 @@
 Drop-in OpenTelemetry instrumentation for multi-agent systems, shipped as a pip package.
 Any Python agent gets gen_ai-semconv spans, cross-process `traceparent`, cost rollup, and
 the analysis/enforcement toolkit (loop + injection + breaker + provenance) in ~3 lines. The
-kit is the product; `examples/research_mesh/` is a reference app built on it.
+kit is the product; `demos/research_mesh/` is a reference app built on it.
 
 ## Layout
 - `src/taraol/` — the package. Core (flat): `setup`, `facade`, `config`, `semconv`,
@@ -12,14 +12,14 @@ kit is the product; `examples/research_mesh/` is a reference app built on it.
   (AgentLab builder/decorators), `experiment_report` (summary/diff read path, lazy `[detection]`).
   Optional subpackages (extras): `integrations/a2a` `[a2a]`, `detection/` `[detection]`,
   `mcp/` `[mcp]`, `tools/search.py` `[search]`. Bundled assets in `data/`.
-- `examples/research_mesh/` — a 5-agent app + its SigNoz Foundry deploy + `compose.yaml`.
+- `demos/research_mesh/` — a 5-agent app + its SigNoz Foundry deploy + `compose.yaml`.
 - `tests/` — offline unit tests (in-memory exporter, fake LLM/search).
 
 ## Commands
 - Tests:   `uv run pytest`         (offline; fake providers, default settings)
 - Lint:    `uv run ruff check .` / `uv run ruff format .`
 - Build:   `uv build`              (wheel + sdist; data files ship)
-- Example: `docker compose -f examples/research_mesh/compose.yaml up -d --build`
+- Example: `docker compose -f demos/research_mesh/compose.yaml up -d --build`
 
 ## Non-negotiable rules
 - **Content-free by default.** No prompt/output/tool text is captured unless

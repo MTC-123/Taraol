@@ -25,7 +25,7 @@ SigNoz is installed with **Foundry** from the committed, reproducible spec — j
 re-run it:
 
 ```sh
-cd examples/research_mesh/signoz
+cd demos/research_mesh/signoz
 foundryctl cast -f casting.yaml        # provisions SigNoz v0.128.0 (compose/docker)
 ```
 
@@ -36,7 +36,7 @@ the exact same deployment plus the mesh agents.
 ## Run it
 
 ```sh
-docker compose -f examples/research_mesh/compose.yaml up -d --build
+docker compose -f demos/research_mesh/compose.yaml up -d --build
 ```
 
 Trigger one conversation (planner is the entry point):
@@ -70,7 +70,7 @@ For the full inspection demo:
 ```sh
 OAK_LLM=gemini GEMINI_API_KEY=… OAK_SEARCH=tavily TAVILY_API_KEY=… \
 OAK_CAPTURE_CONTENT=on MESH_LOOP_MODE=storm \
-docker compose -f examples/research_mesh/compose.yaml up -d --build
+docker compose -f demos/research_mesh/compose.yaml up -d --build
 ```
 
 ## Close the loop with a real SigNoz alert

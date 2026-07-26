@@ -5,7 +5,7 @@ cross-process `traceparent`, cost rollup, a live SigNoz topology, and an analysi
 toolkit (runaway-loop detection, injection blast-radius, per-edge breaker, bad-output provenance)
 — in ~3 lines. Framework-neutral, **private by default**.
 
-> Built for the "Agents of SigNoz" hackathon. `examples/research_mesh/` is a full reference app
+> Built for the "Agents of SigNoz" hackathon. `demos/research_mesh/` is a full reference app
 > (5 agents, real web search, real LLM) built entirely on this library.
 
 ![taraol Service Map in SigNoz — planner → researcher → writer → critic → router, reconstructed from cross-process traceparent](docs/service-map.png)
@@ -114,7 +114,7 @@ Highest Operational Health: baseline
 
 `HealthScore` is pluggable (`100 − 10·loops − 5·breaker − 0.2·latency_s − 0.1·cost − 20·fails`,
 weights overridable) and "highest health" is a factual read, not a universal winner. Runnable
-baseline-vs-runaway: [`examples/research_mesh/experiment.py`](examples/research_mesh/experiment.py).
+baseline-vs-runaway: [`demos/research_mesh/experiment.py`](demos/research_mesh/experiment.py).
 
 ## Analysis + enforcement toolkit
 
@@ -149,11 +149,11 @@ never namespaced; core install is web-dependency-free (fastapi/httpx/mcp live in
 
 ## Reference app
 
-[`examples/research_mesh/`](examples/research_mesh/) — a planner->researcher->writer->critic->router
+[`demos/research_mesh/`](demos/research_mesh/) — a planner->researcher->writer->critic->router
 pipeline with real search, output->input threading, opt-in capture, and the self-defending
 loop/breaker beat, plus a one-command SigNoz + agents `compose.yaml`. Reproducible Foundry deploy:
-committed [`casting.yaml`](examples/research_mesh/signoz/casting.yaml) +
-[`.lock`](examples/research_mesh/signoz/casting.yaml.lock) →
-`foundryctl cast -f examples/research_mesh/signoz/casting.yaml`.
+committed [`casting.yaml`](demos/research_mesh/signoz/casting.yaml) +
+[`.lock`](demos/research_mesh/signoz/casting.yaml.lock) →
+`foundryctl cast -f demos/research_mesh/signoz/casting.yaml`.
 
 Apache-2.0.
