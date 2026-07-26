@@ -1,10 +1,15 @@
 """One research-mesh agent, built entirely on taraol.
 
-Shows the adopter pattern: instrument() once, then wrap each step with the kit's
-context managers. The researcher does a real web search (Tavily/fake). Agent output is
-threaded to the next agent (a genuine A→B→C pipeline); prompts/outputs/tool-I/O are
-captured on spans only when OAK_CAPTURE_CONTENT=on. Loops trip the kit's detection
-watcher + per-edge breaker exactly as the library intends.
+This app deliberately uses the kit's *context-manager* tier, not the @agent/@chat
+decorators from the quickstarts (main.py / main_2.py): a distributed agent needs
+per-request conversation ids, span handles for taint marking and state hashes, and a
+custom LLM client — the fine-control cases the CM API exists for. Same spans, same
+telemetry; pick the tier that fits.
+
+The researcher does a real web search (Tavily/fake). Agent output is threaded to the
+next agent (a genuine A→B→C pipeline); prompts/outputs/tool-I/O are captured on spans
+only when OAK_CAPTURE_CONTENT=on. Loops trip the kit's detection watcher + per-edge
+breaker exactly as the library intends.
 """
 
 import contextlib

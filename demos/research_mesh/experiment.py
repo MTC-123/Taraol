@@ -20,7 +20,7 @@ import os
 
 import httpx
 
-from taraol import Experiment, Variant, current_experiment, instrument
+from taraol import Experiment, current_experiment, instrument
 
 PLANNER_START_URL = os.environ.get("PLANNER_START_URL", "http://localhost:8000/start")
 EXPERIMENT_ID = os.environ.get("AGENTLAB_EXPERIMENT_ID", "converge-vs-runaway")
@@ -28,18 +28,18 @@ USER_INPUT = os.environ.get("AGENTLAB_INPUT", "Summarize recent advances in soli
 FIRE_TIMEOUT_SEC = float(os.environ.get("AGENTLAB_FIRE_TIMEOUT_SEC", "180"))
 
 
-def fire(variant: Variant) -> None:
+def fire(ctx) -> None:
     """Kick one variant conversation at the planner, tagged with the shared run_id."""
 
     experiment = current_experiment()
     assert experiment is not None  # the builder sets this for the duration of the workload
     payload = {
-        "conversation_id": f"{experiment.run_id[:8]}-{variant.name}",
+        "conversation_id": f"{experiment.run_id[:8]}-{ctx.name}",
         "user_input": USER_INPUT,
         "experiment_id": experiment.id,
-        "experiment_variant": variant.name,
+        "experiment_variant": ctx.name,
         "experiment_run_id": experiment.run_id,
-        "loop_mode": variant.config.get("loop_mode", "off"),
+        "loop_mode": ctx.loop_mode,
     }
     response = httpx.post(PLANNER_START_URL, json=payload, timeout=FIRE_TIMEOUT_SEC)
     response.raise_for_status()
@@ -53,8 +53,8 @@ def main() -> None:
             description="research-mesh: converging baseline vs runaway loop",
             author=os.environ.get("USER") or os.environ.get("USERNAME") or "",
         )
-        .variant("baseline", config={"loop_mode": "off"})
-        .variant("runaway", config={"loop_mode": "storm"})
+        .compare("baseline", loop_mode="off")
+        .compare("runaway", loop_mode="storm")
         .run(fire)
     )
     print(f"run_id = {result.run_id}")
