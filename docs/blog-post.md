@@ -1,7 +1,7 @@
 ---
 title: "Two decorators, and your agent team defends itself"
 published: false
-description: "Taraol turns any Python agent into OpenTelemetry telemetry in three lines — then reads that telemetry back to draw the topology, replay the conversation, cut runaway loops with circuit breakers, and tell you which design to ship. All inside SigNoz, with no custom UI."
+description: "Taraol turns any Python agent into OpenTelemetry telemetry in three lines — then reads that telemetry back to draw the topology, replay the conversation, cut runaway loops with self-healing circuit breakers, and tell you which design to ship. All inside SigNoz, with no custom UI."
 tags: opentelemetry, observability, ai, python
 cover_image: https://raw.githubusercontent.com/MTC-123/Taraol/main/docs/defend-beat.gif
 canonical_url:
@@ -159,7 +159,8 @@ OTel-aware tool can read it — the renderer just decodes it to something human.
 ## Defend: detection that does something
 
 This is the beat I care about most. Detection that only produces a notification still needs
-a human awake at 3am.
+a human awake at 3am. Taraol's detection reads telemetry and **acts** — it contains the
+failure, then *heals* the moment the cause clears.
 
 ```
    Agents ──> OpenTelemetry ──> SigNoz ──> Watcher ──> Controller
@@ -170,26 +171,72 @@ a human awake at 3am.
 
 ![Loop detected, edge cut, agent paused](https://raw.githubusercontent.com/MTC-123/Taraol/main/docs/defend-beat.gif)
 
-**Runaway loops.** The watcher looks for repeated communication cycles that make *no
-progress* — distinguished by a repeated state hash or a breached iteration cap. That
-qualifier matters: an intentional generator/critic loop is a legitimate design, and a
-detector that flags it is a detector you'll turn off. Cross-conversation loops get their own
-signal (`xconv_loop_detected`) for an agent ping-ponging across separate traces.
+### How the watcher sees what no single agent can
 
-**Per-edge circuit breakers.** Sometimes the agent is fine and only one path is bad:
+The watcher is a standalone service. It never imports your agents — it queries SigNoz on an
+interval (the v5 Query API when an API key is set, or ClickHouse directly for local
+Community). Each poll it pulls the recent `a2a.call` hop spans and groups them by
+`(trace_id, src, peer)`:
+
+```
+velocity_query:  GROUP BY trace_id, agentmesh.src, peer.service  →  count() AS hops
+```
+
+A high `hops` on one edge is the fingerprint of a loop — but a count alone isn't an incident,
+because a generator/critic pair *should* iterate. So before flagging, the watcher fetches the
+trace and confirms **no progress**: either the same agent emitted an identical
+`agentmesh.state.hash` twice (it's re-deriving the same result), or a hard iteration cap was
+breached. Only then does it emit an ordinary, trace-correlated OpenTelemetry log record:
+
+```
+loop_detected  { conversation_id, edge, hops, reason, experiment_variant, trace_id }
+```
+
+The pathology lived in the *shape of the traffic between processes*; that grouped query is
+what reconstructs it. Cross-conversation loops — an agent ping-ponging across separate traces
+— get their own signal, `xconv_loop_detected`, from the union of edges across conversations.
+
+### Self-healing: the per-edge circuit breaker
+
+Sometimes the agent is fine and only one path is bad:
 
 ```
 Planner ────────► Writer ──X──► Critic
 Researcher ─────► Writer            (only this edge is cut)
 ```
 
-An independent breaker per edge (closed → open → half-open) short-circuits before dispatch,
-so a poisoned or runaway hop stops flowing while the rest of the workflow keeps running.
-Blast radius stays minimal instead of the whole agent going dark.
+Each edge gets its own breaker — a small state machine that short-circuits *before* dispatch,
+so a runaway or poisoned hop stops flowing while the rest of the mesh keeps working:
 
-**Injection taint.** Agents exchange natural language, so a malicious prompt propagates like
-a contagion. Scan an input, mark the span, and the taint spreads downstream automatically
-via OTel baggage:
+```
+          record_failure × N (threshold)
+  CLOSED ───────────────────────────────────▶ OPEN
+    ▲                                            │  reset_timeout elapsed
+    │ trial call succeeds                        ▼
+    └──────────────────  HALF_OPEN  ◀────────────┘
+                            │  one trial hop; fail → OPEN again
+```
+
+This is the self-healing part. An OPEN edge doesn't stay dead: after `reset_timeout` the
+breaker moves to HALF_OPEN and lets **one** trial hop through. It succeeds → back to CLOSED,
+the edge is restored **automatically**; it fails → straight back to OPEN. No operator, no
+restart — the system cuts the bad edge, waits, and re-tests it on its own.
+
+```python
+from taraol.breaker import get_registry, edge_key
+
+edge = edge_key("writer", "critic")
+if get_registry().allow(edge):     # False while OPEN — the runaway hop can't continue
+    ...                            # dispatch, then record_success() / record_failure()
+```
+
+Blast radius stays minimal — one edge, not the whole agent going dark — and recovery needs no
+human in the loop.
+
+### Injection taint
+
+Agents exchange natural language, so a malicious prompt propagates like a contagion. Scan an
+input, mark the span, and the taint spreads downstream automatically via OTel baggage:
 
 ```python
 verdict = scan(fetched_docs, INPUT)
@@ -198,13 +245,27 @@ if verdict.flagged:
 ```
 
 The question changes from *"was this agent attacked?"* to *"which agents consumed poisoned
-information?"* — and you read the blast radius off SigNoz.
+information?"* — and you read the blast radius off SigNoz. The `injection_detected` signal
+carries the origin and the comma-joined set of services the taint reached.
 
-**Enforcement closes the loop.** A SigNoz alert fires on the signal, a webhook hits the
-controller, and the controller pauses the agent or trips the breaker — then records the
-action as its own telemetry (`agent_paused`, `edge_broken`). **Nothing happens silently.**
-Enforcement is observable, which is the only version of automated enforcement I'd actually
-run in production.
+### Enforcement: SigNoz owns the policy, the controller acts
+
+The breaker heals a *local* edge on its own. For a distributed loop, detection and enforcement
+are deliberately separated, with SigNoz as the policy boundary:
+
+```
+loop_detected log
+   └▶ SigNoz alert rule            ← you set the threshold and when it matters
+        └▶ webhook → Controller     ← POST from SigNoz's alertmanager
+             └▶ pause agent / break edge
+                  └▶ agent_paused / edge_broken  ──▶ back to SigNoz (audit)
+```
+
+The **watcher** decides the telemetry is *suspicious*. **SigNoz** decides whether that should
+trigger a response — a visible, editable alert rule, not logic buried inside a detector. The
+**controller** performs the action and records it as its own telemetry. **Nothing happens
+silently** — which is the only version of automated enforcement I'd actually run in
+production.
 
 Every signal is an ordinary OpenTelemetry log record, searchable next to the trace it points
 at:
