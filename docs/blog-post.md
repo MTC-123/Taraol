@@ -1,8 +1,8 @@
 ---
-title: "Two decorators, and your agent team defends itself"
-published: false
+title: "Taraol: making a distributed AI-agent mesh observable — and self-defending — with SigNoz"
+published: True
 description: "Taraol turns any Python agent into OpenTelemetry telemetry in three lines, then reads that telemetry back to draw the topology, replay the conversation, cut runaway loops with self-healing circuit breakers, and tell you which design to ship. All inside SigNoz, with no custom UI."
-tags: opentelemetry, observability, ai, python
+tags: opentelemetry, ai, observability, signoz
 cover_image: https://raw.githubusercontent.com/MTC-123/Taraol/main/docs/defend-beat.gif
 canonical_url:
 ---
