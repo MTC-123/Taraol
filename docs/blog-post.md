@@ -60,7 +60,7 @@ That last point is the load-bearing one. The pathology doesn't exist inside any 
 
 Which is convenient, because if detection reads telemetry rather than application code, it works regardless of framework, language, or who wrote which agent.
 
-## Observe: three lines, and you keep your code
+## 1. Observe: three lines, and you keep your code
 
 The integration is deliberately boring. `instrument()` once per process: it wires a `ParentBased(ALWAYS_ON)` provider, a batching OTLP exporter, W3C trace context + baggage, and the price table. Then decorators wrap functions you already have:
 
@@ -88,8 +88,7 @@ The function bodies stay your normal SDK calls. No wrappers, no monkey patching,
 
 Return the raw SDK response from a `@chat` function and usage is read straight off it: google-genai, OpenAI-compatible, Anthropic, and flat result shapes are all duck-typed. No manual token counting.
 
-**Content capture is off by default.** No prompt, completion, or tool text leaves your process unless you explicitly opt in. A test asserts `gen_ai.input.messages` is absent on
-the default path: the privacy claim is enforced, not documented.
+**Content capture is off by default.** No prompt, completion, or tool text leaves your process unless you explicitly opt in. A test asserts `gen_ai.input.messages` is absent on the default path: the privacy claim is enforced, not documented.
 
 ### The map draws itself
 
@@ -125,7 +124,7 @@ This one took a bug to get right. Cost splits into two attributes that mean diff
 
 Sum both and you double-count the whole conversation. The bundled dashboards use `direct_usd` for per-agent and per-conversation cost,`downstream_usd` for the per-edge view.
 
-## Debug: replay the conversation from telemetry
+## 2. Debug: replay the conversation from telemetry
 
 When something goes wrong you don't want a trace ID, you want the transcript:
 
@@ -143,7 +142,7 @@ That's reconstructed from trace rows, not from an application-side log the app h
 
 ![A research-mesh trace in SigNoz](https://raw.githubusercontent.com/MTC-123/Taraol/main/docs/mesh-trace.png)
 
-## Defend: detection that does something
+## 3. Defend: detection that does something
 
 This is the beat I care about most. Detection that only produces a notification still needs a human awake at 3am. Taraol's detection reads telemetry and **acts**: it contains the failure, then *heals* the moment the cause clears.
 
@@ -158,22 +157,13 @@ This is the beat I care about most. Detection that only produces a notification 
 
 ### "But doesn't my framework already cap loops?"
 
-Some do. LangGraph has `recursion_limit`, CrewAI has `max_iter`, AutoGen has `max_turns`.
-They're all the same shape: an **in-process counter, per framework, that aborts the whole run**
-when it trips. Three things they can't do, and all three are this demo:
+Some do. LangGraph has `recursion_limit`, CrewAI has `max_iter`, AutoGen has `max_turns`. They're all the same shape: an **in-process counter, per framework, that aborts the whole run** when it trips. Three things they can't do, and all three are this demo:
 
-- **See across processes.** A counter inside LangGraph can't see a loop where a LangGraph agent
-  calls a plain FastAPI agent calls a CrewAI agent. Taraol reads the *traces* across all of
-  them, framework- and language-agnostic.
-- **Tell stuck from productive.** A counter fires at N whether the loop made progress or not.
-  Taraol flags only *no-progress* loops (a repeated state hash), so a legitimate
-  generator/critic iteration survives.
-- **Contain surgically, then recover.** A framework raises an exception and the whole run dies.
-  Taraol cuts the one bad edge, keeps the rest of the mesh running, and self-heals when the edge
-  recovers.
+- **See across processes.** A counter inside LangGraph can't see a loop where a LangGraph agent calls a plain FastAPI agent calls a CrewAI agent. Taraol reads the *traces* across all of them, framework- and language-agnostic.
+- **Tell stuck from productive.** A counter fires at N whether the loop made progress or not. Taraol flags only *no-progress* loops (a repeated state hash), so a legitimate generator/critic iteration survives.
+- **Contain surgically, then recover.** A framework raises an exception and the whole run dies. Taraol cuts the one bad edge, keeps the rest of the mesh running, and self-heals when the edge  recovers.
 
-And if you build on raw SDKs (Gemini, OpenAI, Anthropic), there's no loop control at all. Taraol
-works the same either way, because it lives in the telemetry, not the control flow.
+And if you build on raw SDKs (Gemini, OpenAI, Anthropic), there's no loop control at all. Taraol works the same either way, because it lives in the telemetry, not the control flow.
 
 ### How the watcher sees what no single agent can
 
@@ -213,10 +203,7 @@ Each edge gets its own breaker, a small state machine that short-circuits *befor
                             │  one trial hop; fail → OPEN again
 ```
 
-This is the self-healing part. An OPEN edge doesn't stay dead: after `reset_timeout` the
-breaker moves to HALF_OPEN and lets **one** trial hop through. It succeeds → back to CLOSED,
-the edge is restored **automatically**; it fails → straight back to OPEN. No operator, no
-restart: the system cuts the bad edge, waits, and re-tests it on its own.
+This is the self-healing part. An OPEN edge doesn't stay dead: after `reset_timeout` the breaker moves to HALF_OPEN and lets **one** trial hop through. It succeeds → back to CLOSED, the edge is restored **automatically**; it fails → straight back to OPEN. No operator, no restart: the system cuts the bad edge, waits, and re-tests it on its own.
 
 ```python
 from taraol.breaker import get_registry, edge_key
@@ -254,8 +241,7 @@ loop_detected log
 
 The **watcher** decides the telemetry is *suspicious*. **SigNoz** decides whether that should trigger a response: a visible, editable alert rule, not logic buried inside a detector. The **controller** performs the action and records it as its own telemetry. **Nothing happens silently**, which is the only version of automated enforcement I'd actually run in production.
 
-Every signal is an ordinary OpenTelemetry log record, searchable next to the trace it points
-at:
+Every signal is an ordinary OpenTelemetry log record, searchable next to the trace it points at:
 
 | signal | meaning |
 |---|---|
@@ -268,7 +254,7 @@ at:
 
 No separate monitoring system. No custom database. It's all SigNoz.
 
-## Improve: which design should I actually deploy?
+## 4. Improve: which design should I actually deploy?
 
 Observability tells you what happened. It doesn't tell you what to ship. **AgentLab** runs the
 same workload as tagged variants and compares them on **operational** telemetry (cost, latency,
@@ -276,9 +262,7 @@ loops, breaker trips, failures), *not* answer quality. That boundary is delibera
 which design is cheaper, faster, and more stable to *run*, which complements a quality eval
 rather than replacing it.
 
-Start with the question every team has this quarter: **Gemini 3, GPT-5, or Claude?** A variant
-is just configuration, so a model bake-off is a few lines, and the same `@chat` reads token
-usage off all three providers' response shapes:
+Start with the question every team has this quarter: **Gemini 3, GPT-5, or Claude?** A variant is just configuration, so a model bake-off is a few lines, and the same `@chat` reads token usage off all three providers' response shapes:
 
 ```python
 from taraol import Experiment, agent, chat, instrument
@@ -308,8 +292,7 @@ def run(ctx):
     .run(run))
 ```
 
-You get a table like this (numbers illustrative), and now you're choosing on cost, latency, and
-stability instead of vibes:
+You get a table like this (numbers illustrative), and now you're choosing on cost, latency, and stability instead of vibes:
 
 ```
 variant   cost$    tokens   avg ms   fails   health
@@ -318,11 +301,9 @@ gpt5      0.0180    1310      4200      0       95
 claude    0.0110    1180      3100      0       96
 ```
 
-One caveat worth stating: put each model's pricing in the price table (bundled, or via
-`OAK_PRICING_FILE`), or the cost column reads *unpriced*.
+One caveat worth stating: put each model's pricing in the price table (bundled, or via `OAK_PRICING_FILE`), or the cost column reads *unpriced*.
 
-Because a variant is *just config*, anything that changes the run is comparable with the same
-fluent API:
+Because a variant is *just config*, anything that changes the run is comparable with the same fluent API:
 
 | dimension | knob | the question it answers |
 |---|---|---|
@@ -354,8 +335,7 @@ experiment dashboard, with no new UI and no separate store.
 ![The AgentLab comparison dashboard in SigNoz](https://raw.githubusercontent.com/MTC-123/Taraol/main/docs/agentlab-dashboard.png)
 
 The baseline-vs-runaway table at the top of this post came from exactly this, run over the mesh.
-Its `loops` and `breakers` columns aren't instrumented by the experiment; they come from the
-**watcher detecting the storm in telemetry**, with the signals carrying the variant that caused
+Its `loops` and `breakers` columns aren't instrumented by the experiment; they come from the **watcher detecting the storm in telemetry**, with the signals carrying the variant that caused
 them. Defend and Improve are the same data read two ways.
 
 The health score is deliberately transparent and overridable:
@@ -366,9 +346,7 @@ health = 100 - 10·loops - 5·breaker_trips - 0.2·latency_s - 0.1·cost_usd - 2
 
 "Highest Operational Health" is a factual read against weights *you* set, not a universal winner. One team optimises cost, another latency, another stability. A tool that hard-codes that tradeoff is lying to somebody.
 
-Small design detail I'd defend: a variant that raises is recorded `status=failed` and the
-run continues. An experiment runner that aborts on one failure is useless precisely when
-you need it.
+Small design detail I'd defend: a variant that raises is recorded `status=failed` and the run continues. An experiment runner that aborts on one failure is useless precisely when you need it.
 
 ## Try it
 
