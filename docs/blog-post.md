@@ -7,11 +7,43 @@ cover_image: https://raw.githubusercontent.com/MTC-123/Taraol/main/docs/defend-b
 canonical_url:
 ---
 
-SigNoz's framing for this hackathon is *"if you can't observe your AI agents, you don't own
-them."* I want to push on it: observing is table stakes. The interesting question is what
-your system can **do** with what it observed, while it's still running.
+Have you ever shipped a multi-agent app, watched every request come back `200`, and still had
+no real idea what your agents were doing to *each other*?
 
-Here's a run from the distributed demo — the same workload, two designs:
+**Taraol is an SDK** — one `pip install` — that answers exactly that. Drop two decorators on
+your Python agents and you get full OpenTelemetry tracing, per-call token and cost tracking, a
+live topology, conversation replay, operational experiments, and automatic loop/injection
+defense. It's built entirely on **OpenTelemetry** and **SigNoz** — no proprietary SDK, no
+custom UI — and it works with any Python agent (Gemini, OpenAI, Anthropic, LangChain, or your
+own code).
+
+What's in the box:
+
+- 🔍 **Distributed tracing** — gen_ai semantic conventions, one trace id across processes
+- 💰 **Token + cost per call** — read straight off the SDK response
+- 🗺️ **Live Service Map** — your agent topology, drawn by SigNoz from traces
+- 🧪 **AgentLab** — compare agent *designs* on real operational telemetry
+- 🛡️ **Self-defense** — runaway-loop detection, self-healing circuit breakers, injection taint
+- 🔁 **Closed loop** — detection → SigNoz alert → automatic enforcement → audit
+
+### Picture five agents
+
+Say you run `planner → researcher → writer → critic → router`, each in its own service, talking
+over HTTP. From the outside, everything's green. But the writer and critic get stuck revising
+each other forever — and *no single service can see it*, because the loop only exists in the
+traffic **between** them.
+
+Here's what Taraol gives you for that system, in four verbs:
+
+1. **Observe** — every agent, tool, and model call is a span in SigNoz, with tokens and cost,
+   stitched into one distributed trace. The five services render as a Service Map on their own.
+2. **Debug** — replay the whole conversation from telemetry: each agent's input → output → tools.
+3. **Defend** — a watcher reads the telemetry, spots the writer↔critic loop no agent could see,
+   and a per-edge circuit breaker cuts it — then heals the edge automatically once it recovers.
+4. **Improve** — run the converging design and the runaway design as one experiment and compare
+   them on cost, latency, loops, and breaker trips. AgentLab tells you which to ship.
+
+And the proof, from that exact demo — same workload, two designs:
 
 ```
 variant       cost$   tokens  agents   avg ms  loops  breakers  fails  health
@@ -21,13 +53,9 @@ runaway      0.0266     9457       5   130972      1         1      0    58.8
 Highest Operational Health: baseline
 ```
 
-Two prompts. Both produce a fine answer. One costs 2.3× more, runs 3× longer, spins a
-runaway loop, and trips a circuit breaker on the way. **No prompt-eval tool will ever tell
-you that** — it's not a quality difference, it's an operational one, and it only exists in
-telemetry.
-
-That's Taraol: an OpenTelemetry-native framework for AI agents that turns instrumentation
-into four verbs — **Observe, Debug, Defend, Improve** — with SigNoz as the entire UI.
+Two prompts. Both produce a fine answer. One costs 2.3× more, runs 3× longer, spins a runaway
+loop, and trips a circuit breaker on the way. **No prompt-eval tool will ever tell you that** —
+it's not a quality difference, it's an operational one, and it only exists in telemetry.
 
 ![The same workload, two designs](https://raw.githubusercontent.com/MTC-123/Taraol/main/docs/agentlab-compare.gif)
 
