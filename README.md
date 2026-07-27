@@ -49,8 +49,8 @@ in four verbs:
   (google-genai, OpenAI-compatible, Anthropic, flat shapes).
 - 🧠 **Prompt & response replay** — `taraol explain <trace> --replay`; opt-in, private by
   default. [Learn more →](docs/observability.md)
-- 🧪 **AgentLab** — compare variants on cost / latency / loops / breaker trips / failures.
-  [Learn more →](docs/agentlab.md)
+- 🧪 **AgentLab** — compare models / prompts / topologies on cost / latency / loops / breaker
+  trips / failures. [Learn more →](docs/agentlab.md)
 - 🛡️ **Self-defending mesh** — loop detection, per-edge circuit breakers, injection taint,
   provenance, alert → enforcement. [Learn more →](docs/self-defense.md)
 - ☁️ **Vendor-neutral** — plain OpenTelemetry; send to SigNoz today, any OTel backend tomorrow.
@@ -94,18 +94,48 @@ conversation ids, span handles, streaming)? The context-manager tier does the sa
 
 ## AgentLab — which design should I deploy?
 
-Compare variants of the same workload on **operational** telemetry, not answer quality:
+Compare variants of the same workload on **operational** telemetry (cost, latency, loops,
+breaker trips, failures), not answer quality. A variant is just config, so the same API compares
+**models, prompts, temperatures, topologies, or tools**.
+
+**Model bake-off** — the question every team has right now, *Gemini 3 vs GPT-5 vs Claude?*, in a
+few lines (the same `@chat` reads token usage off all three providers' response shapes):
 
 ```python
-from taraol import Experiment
+from taraol import Experiment, agent, chat
 
-(
-    Experiment("docs-assistant", author="Fraol")
-    .compare("terse", prompt="Explain OpenTelemetry in exactly one sentence.")
+@chat("gemini-3-pro")
+def ask_gemini(p): return gemini.models.generate_content(model="gemini-3-pro", contents=p)
+
+@chat("gpt-5")
+def ask_gpt(p): return openai.chat.completions.create(
+        model="gpt-5", messages=[{"role": "user", "content": p}])
+
+@chat("claude-opus-4-5")
+def ask_claude(p): return anthropic.messages.create(
+        model="claude-opus-4-5", max_tokens=1024, messages=[{"role": "user", "content": p}])
+
+PROVIDERS = {"gemini": ask_gemini, "gpt5": ask_gpt, "claude": ask_claude}
+
+@agent(name="assistant")
+def run(ctx):
+    PROVIDERS[ctx.provider](TASK)          # the variant picks the provider
+
+(Experiment("model-bakeoff", author="Fraol")
+    .compare("gemini", provider="gemini")
+    .compare("gpt5",   provider="gpt5")
+    .compare("claude", provider="claude")
+    .run(run))
+```
+
+Swap the knob to compare **prompts** instead (same API, different config):
+
+```python
+(Experiment("docs-assistant", author="Fraol")
+    .compare("terse",   prompt="Explain OpenTelemetry in exactly one sentence.")
     .compare("verbose", prompt="Explain OpenTelemetry in three detailed paragraphs.")
     .compare("broken")  # a failing variant is recorded, not fatal
-    .run(answer)
-)  # runs once per variant, one shared run_id
+    .run(answer))  # runs once per variant, one shared run_id
 ```
 
 Every span is tagged with the experiment + variant, so **SigNoz becomes the experiment
